@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Texas Hold'em Monte Carlo Simulator</title>
+  <meta name="description" content="Interactive No-Limit Texas Hold'em simulator with configurable players, hole cards, community cards, and player archetypes." />
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* __STYLES__ */
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased m-0 p-0 four-color-deck">
+  <div class="max-w-6xl mx-auto px-4 py-5 space-y-5">
+    <!-- Header Bar -->
+    <header class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-[var(--foreground)]">Texas Hold'em Simulator</h1>
+        <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+          Configure seats, hole cards, board, and player types to compare strategy-adjusted EV against raw showdown equity.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+          <span>Preset:</span>
+          <select
+            id="preset-select"
+            aria-label="Load preset scenario"
+            class="px-2.5 py-1.5 text-xs rounded-md bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)] max-w-[270px]"
+          ></select>
+        </label>
+        <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[var(--card)] border border-[var(--border)] text-xs text-[var(--foreground)] cursor-pointer select-none">
+          <input id="four-color-toggle" type="checkbox" checked class="accent-[var(--primary)]" />
+          <span>4-Color Deck</span>
+        </label>
+        <button
+          id="reset-btn"
+          type="button"
+          class="px-2.5 py-1.5 text-xs font-medium rounded-md bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--content)]"
+        >
+          Reset
+        </button>
+      </div>
+    </header>
+
+    <!-- Validation Error Banner -->
+    <div
+      id="error-banner"
+      role="alert"
+      class="hidden px-3 py-2 rounded-lg text-xs font-medium border"
+      style="border-color: var(--error); color: var(--error); background: var(--card);"
+    ></div>
+
+    <!-- Main Setup Workspace -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+      <!-- Left: Table Settings, Board, and Seats -->
+      <div class="lg:col-span-7 space-y-4">
+        <!-- Table Settings Card -->
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <div class="flex flex-wrap items-center gap-3 justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-medium text-[var(--muted-foreground)]">Players</span>
+              <div class="inline-flex items-center rounded-md border border-[var(--border)] bg-[var(--content)]">
+                <button
+                  id="dec-players-btn"
+                  type="button"
+                  aria-label="Decrease players"
+                  class="px-2.5 py-1 text-xs font-bold text-[var(--foreground)] hover:bg-[var(--card)] rounded-l-md"
+                >−</button>
+                <span id="player-count-val" class="px-2.5 py-1 text-xs font-mono font-bold tabular-nums text-[var(--foreground)]">4</span>
+                <button
+                  id="inc-players-btn"
+                  type="button"
+                  aria-label="Increase players"
+                  class="px-2.5 py-1 text-xs font-bold text-[var(--foreground)] hover:bg-[var(--card)] rounded-r-md"
+                >+</button>
+              </div>
+            </div>
+
+            <label class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+              <span>Trials</span>
+              <select
+                id="trials-select"
+                class="px-2 py-1 text-xs rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)] tabular-nums"
+              >
+                <option value="1000">1,000</option>
+                <option value="5000">5,000</option>
+                <option value="10000" selected>10,000</option>
+                <option value="25000">25,000</option>
+                <option value="50000">50,000</option>
+                <option value="100000">100,000</option>
+              </select>
+            </label>
+
+            <label class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+              <span>Stack</span>
+              <input
+                id="stack-input"
+                type="number"
+                min="5"
+                max="1000"
+                step="5"
+                value="100"
+                class="w-16 px-2 py-1 text-xs text-right tabular-nums rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)]"
+              />
+              <span>BB</span>
+            </label>
+
+            <label id="starting-pot-group" class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]" title="Pot size already in middle when starting on Flop/Turn/River">
+              <span>Start Pot</span>
+              <input
+                id="pot-input"
+                type="number"
+                min="2"
+                max="500"
+                step="1"
+                value="12"
+                class="w-14 px-2 py-1 text-xs text-right tabular-nums rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)]"
+              />
+              <span>BB</span>
+            </label>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--card-border)]">
+            <label class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+              <span>Board Mode</span>
+              <select
+                id="mode-select"
+                class="px-2 py-1 text-xs rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)]"
+              >
+                <option value="street">Start betting at board street</option>
+                <option value="preflop">Play from preflop (lock future board)</option>
+              </select>
+            </label>
+
+            <label class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+              <span>Seed</span>
+              <input
+                id="seed-input"
+                type="text"
+                placeholder="Random"
+                class="w-24 px-2 py-1 text-xs rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)] placeholder:text-[var(--placeholder)]"
+              />
+            </label>
+          </div>
+        </div>
+
+        <!-- Community Cards Card -->
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-sm font-semibold text-[var(--foreground)]">Community Cards</h2>
+              <p class="text-xs text-[var(--muted-foreground)]">Leave slots as <span class="font-mono">?</span> to deal randomly on each run.</p>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button
+                id="random-flop-btn"
+                type="button"
+                class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--card)]"
+              >
+                Random Flop
+              </button>
+              <button
+                id="clear-board-btn"
+                type="button"
+                class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              >
+                Clear Board
+              </button>
+            </div>
+          </div>
+          <div id="board-slots" class="flex flex-wrap items-center gap-2"></div>
+        </div>
+
+        <!-- Player Seats Card -->
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-sm font-semibold text-[var(--foreground)]">Players & Archetypes</h2>
+              <p class="text-xs text-[var(--muted-foreground)]">Click any card slot, then pick a card from the deck on the right.</p>
+            </div>
+          </div>
+          <div id="seats-container" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"></div>
+        </div>
+      </div>
+
+      <!-- Right: Sticky 52-Card Deck Picker & Run Action -->
+      <div class="lg:col-span-5 lg:sticky lg:top-4 space-y-4">
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <div class="text-xs text-[var(--muted-foreground)]">Active Slot</div>
+              <div id="picker-target-label" class="text-sm font-semibold text-[var(--foreground)] truncate"></div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button
+                id="set-random-slot-btn"
+                type="button"
+                class="px-2 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--card)]"
+                title="Set active slot to unknown/random (Backspace)"
+              >
+                Set Random (?)
+              </button>
+              <button
+                id="clear-all-cards-btn"
+                type="button"
+                class="px-2 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+
+          <!-- 4 x 13 Card Grid -->
+          <div id="deck-picker-grid" class="space-y-1.5"></div>
+
+          <p class="text-xs text-[var(--muted-foreground)]">
+            Tip: Assigning a card auto-advances to the next empty slot. Press <kbd class="px-1 py-0.5 rounded bg-[var(--content)] border border-[var(--border)] font-mono">Backspace</kbd> to clear a slot.
+          </p>
+
+          <!-- Primary Run Bar -->
+          <div class="pt-3 border-t border-[var(--card-border)] space-y-2.5">
+            <div class="flex items-center gap-2">
+              <button
+                id="run-sim-btn"
+                type="button"
+                class="flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-95 transition-opacity disabled:opacity-60 cursor-pointer"
+              >
+                Run 10,000 Hands
+              </button>
+              <button
+                id="copy-json-btn"
+                type="button"
+                class="px-3 py-2.5 text-xs font-medium rounded-lg bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--card)] shrink-0"
+                title="Copy scenario JSON configuration"
+              >
+                Copy JSON
+              </button>
+            </div>
+
+            <div id="sim-progress-wrap" class="hidden space-y-1">
+              <div class="bar-track">
+                <div id="sim-progress-bar" class="bar-fill" style="width: 0%; background: var(--primary);"></div>
+              </div>
+              <div id="sim-progress-text" class="text-xs text-[var(--muted-foreground)] tabular-nums text-right"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Player Type Configuration (Live Tunable Parameters) -->
+    <section id="archetype-config-section" class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[var(--card-border)]">
+        <div>
+          <h2 class="text-sm font-semibold text-[var(--foreground)]">Player Type Configuration</h2>
+          <p class="text-xs text-[var(--muted-foreground)]">
+            Inspect and adjust exact behavioral rules for each archetype—changes apply directly on the next simulation run.
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button
+            id="reset-arch-btn"
+            type="button"
+            class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          >
+            Reset Selected
+          </button>
+          <button
+            id="reset-all-arch-btn"
+            type="button"
+            class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          >
+            Reset All Defaults
+          </button>
+          <button
+            id="apply-arch-run-btn"
+            type="button"
+            class="px-3 py-1 text-xs font-semibold rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-95"
+          >
+            Apply &amp; Re-run
+          </button>
+        </div>
+      </div>
+
+      <!-- Archetype Tabs -->
+      <div id="archetype-tabs" class="flex flex-wrap items-center gap-1.5"></div>
+
+      <!-- Selected Archetype Sliders + All-Types Comparison Matrix -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        <div class="lg:col-span-6 space-y-2.5">
+          <div id="archetype-selected-desc" class="text-xs text-[var(--muted-foreground)]"></div>
+          <div id="archetype-sliders" class="space-y-3"></div>
+        </div>
+        <div class="lg:col-span-6 rounded-lg bg-[var(--content)] border border-[var(--card-border)] overflow-hidden">
+          <div class="px-3 py-2 border-b border-[var(--card-border)] flex items-center justify-between">
+            <span class="text-xs font-semibold text-[var(--foreground)]">All Player Types Comparison</span>
+            <span class="text-xs text-[var(--muted-foreground)]">Click a row to edit</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs tabular-nums">
+              <thead>
+                <tr class="border-b border-[var(--card-border)] text-[var(--muted-foreground)]">
+                  <th class="py-2 px-2.5 font-semibold">Type</th>
+                  <th class="py-2 px-1.5 text-right" title="Preflop Looseness (VPIP)">VPIP</th>
+                  <th class="py-2 px-1.5 text-right" title="Preflop Raise / 3-Bet">PreAgg</th>
+                  <th class="py-2 px-1.5 text-right" title="Postflop Tightness (Fold to Bets)">Fold</th>
+                  <th class="py-2 px-1.5 text-right" title="Draw Chasing">Draws</th>
+                  <th class="py-2 px-1.5 text-right" title="Postflop Bet / Raise">PostAgg</th>
+                  <th class="py-2 px-1.5 text-right" title="Bluff Frequency">Bluff</th>
+                  <th class="py-2 px-2 text-right" title="Bet Sizing (% of Pot)">Size</th>
+                </tr>
+              </thead>
+              <tbody id="archetype-matrix-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results Dashboard -->
+    <section id="results-section" class="hidden space-y-4 pt-1">
+      <div class="flex items-center justify-between gap-2">
+        <h2 class="text-base font-bold text-[var(--foreground)]">Simulation Results</h2>
+        <span class="text-xs text-[var(--muted-foreground)]">
+          Actual Win% includes fold equity · Raw Equity% assumes all players reach showdown
+        </span>
+      </div>
+
+      <!-- KPI Summary Strip -->
+      <div id="results-kpis" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
+
+      <!-- Per-Player Table -->
+      <div class="rounded-xl bg-[var(--card)] border border-[var(--border)] overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-[var(--content)] text-xs font-semibold text-[var(--muted-foreground)]">
+                <th class="py-2.5 px-3">Player</th>
+                <th class="py-2.5 px-2">Cards</th>
+                <th class="py-2.5 px-3">Actual Win %</th>
+                <th class="py-2.5 px-3">Raw Equity % (Δ)</th>
+                <th class="py-2.5 px-3 text-right">EV / Hand</th>
+                <th class="py-2.5 px-2.5 text-right" title="Percentage of hands folded before showdown">Fold%</th>
+                <th class="py-2.5 px-2.5 text-right" title="Went To Showdown %">WTSD%</th>
+                <th class="py-2.5 px-2.5 text-right" title="Voluntarily Put Money In Pot %">VPIP%</th>
+                <th class="py-2.5 px-3 text-right" title="Bet/Raise share of all non-fold actions">Agg%</th>
+              </tr>
+            </thead>
+            <tbody id="results-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Street & Hand Rank Breakdown -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <h3 class="text-sm font-semibold text-[var(--foreground)]">Where Hands Ended</h3>
+          <div id="street-breakdown" class="space-y-2.5"></div>
+        </div>
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <h3 class="text-sm font-semibold text-[var(--foreground)]">Showdown Winning Hand Ranks</h3>
+          <div id="hand-rank-breakdown" class="space-y-1.5"></div>
+        </div>
+      </div>
+
+      <!-- Sample Hand Histories -->
+      <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-semibold text-[var(--foreground)]">Sample Hand Histories</h3>
+            <p class="text-xs text-[var(--muted-foreground)]">Inspect actual play-by-play decisions made by each player archetype.</p>
+          </div>
+          <div id="sample-hand-tabs" class="flex flex-wrap items-center gap-1.5"></div>
+        </div>
+        <div id="sample-hand-body"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    /* __SCRIPT__ */
+  </script>
+</body>
+</html>

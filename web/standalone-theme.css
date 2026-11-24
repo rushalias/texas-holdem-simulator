@@ -1,0 +1,56 @@
+/* Standalone browser theme tokens (used when running via Docker or locally outside Antigravity) */
+:root {
+  --background: #f4f4f5;
+  --content: #fafafa;
+  --card: #ffffff;
+  --sidebar: #f4f4f5;
+  --border: #d4d4d8;
+  --card-border: #e4e4e7;
+  --foreground: #18181b;
+  --muted-foreground: #52525b;
+  --placeholder: #a1a1aa;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --secondary: #e4e4e7;
+  --secondary-foreground: #18181b;
+  --accent: #0d9488;
+  --success: #15803d;
+  --warning: #b45309;
+  --error: #dc2626;
+  --chart-1: #0f766e;
+  --chart-2: #0284c7;
+  --chart-3: #d97706;
+  --chart-4: #4f46e5;
+  --chart-5: #dc2626;
+  --chart-6: #16a34a;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    --content: #18181b;
+    --card: #121215;
+    --sidebar: #111113;
+    --border: #2e2e34;
+    --card-border: #27272a;
+    --foreground: #f4f4f5;
+    --muted-foreground: #a1a1aa;
+    --placeholder: #71717a;
+    --primary: #14b8a6;
+    --primary-foreground: #042f2e;
+    --secondary: #27272a;
+    --secondary-foreground: #f4f4f5;
+    --accent: #2dd4bf;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --error: #f87171;
+    --chart-1: #14b8a6;
+    --chart-2: #38bdf8;
+    --chart-3: #f59e0b;
+    --chart-4: #818cf8;
+    --chart-5: #fb7185;
+    --chart-6: #4ade80;
+  }
+}

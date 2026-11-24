@@ -1,0 +1,3692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Texas Hold'em Monte Carlo Simulator</title>
+  <meta name="description" content="Interactive No-Limit Texas Hold'em simulator with configurable players, hole cards, community cards, and player archetypes." />
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Standalone browser theme tokens (used when running via Docker or locally outside Antigravity) */
+:root {
+  --background: #f4f4f5;
+  --content: #fafafa;
+  --card: #ffffff;
+  --sidebar: #f4f4f5;
+  --border: #d4d4d8;
+  --card-border: #e4e4e7;
+  --foreground: #18181b;
+  --muted-foreground: #52525b;
+  --placeholder: #a1a1aa;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --secondary: #e4e4e7;
+  --secondary-foreground: #18181b;
+  --accent: #0d9488;
+  --success: #15803d;
+  --warning: #b45309;
+  --error: #dc2626;
+  --chart-1: #0f766e;
+  --chart-2: #0284c7;
+  --chart-3: #d97706;
+  --chart-4: #4f46e5;
+  --chart-5: #dc2626;
+  --chart-6: #16a34a;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    --content: #18181b;
+    --card: #121215;
+    --sidebar: #111113;
+    --border: #2e2e34;
+    --card-border: #27272a;
+    --foreground: #f4f4f5;
+    --muted-foreground: #a1a1aa;
+    --placeholder: #71717a;
+    --primary: #14b8a6;
+    --primary-foreground: #042f2e;
+    --secondary: #27272a;
+    --secondary-foreground: #f4f4f5;
+    --accent: #2dd4bf;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --error: #f87171;
+    --chart-1: #14b8a6;
+    --chart-2: #38bdf8;
+    --chart-3: #f59e0b;
+    --chart-4: #818cf8;
+    --chart-5: #fb7185;
+    --chart-6: #4ade80;
+  }
+}
+
+
+/* Custom playing cards & focused interactive controls (theme-aware via semantic variables) */
+
+* {
+  box-sizing: border-box;
+}
+
+.poker-card {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.poker-card-slot {
+  width: 2.85rem;
+  height: 3.85rem;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  background: var(--content);
+  color: var(--muted-foreground);
+}
+
+.poker-card-slot:hover {
+  transform: translateY(-1px);
+  border-color: var(--primary);
+}
+
+.poker-card-slot.is-filled {
+  background: #ffffff;
+  border-color: #d4d4d8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+}
+
+.poker-card-slot.is-active {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-color: var(--primary);
+}
+
+.poker-card-slot .card-clear-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 17px;
+  height: 17px;
+  border-radius: 9999px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 11px;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  z-index: 5;
+}
+
+.poker-card-slot.is-filled:hover .card-clear-btn,
+.poker-card-slot.is-active.is-filled .card-clear-btn {
+  display: inline-flex;
+}
+
+.poker-card-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 2.15rem;
+  height: 1.65rem;
+  padding: 0 0.3rem;
+  border-radius: 0.32rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid #d4d4d8;
+  background: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.poker-card-mini.is-unknown {
+  background: var(--content);
+  border-color: var(--border);
+  color: var(--muted-foreground);
+}
+
+/* Suit colors on crisp ivory/white card face */
+.suit-s { color: #18181b; }
+.suit-h { color: #dc2626; }
+.suit-d { color: #dc2626; }
+.suit-c { color: #18181b; }
+
+/* 4-color deck mode (beloved by poker players for instant suit readability) */
+.four-color-deck .suit-d { color: #2563eb; }
+.four-color-deck .suit-c { color: #15803d; }
+
+/* Deck Picker buttons */
+.deck-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 2.45rem;
+  border-radius: 0.375rem;
+  border: 1px solid #d4d4d8;
+  background: #ffffff;
+  font-weight: 700;
+  font-size: 0.8rem;
+  line-height: 1.05;
+  cursor: pointer;
+  transition: transform 90ms ease, box-shadow 90ms ease, opacity 120ms ease;
+}
+
+.deck-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+  border-color: var(--primary);
+}
+
+.deck-btn:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+  background: var(--content);
+  border-color: var(--border);
+}
+
+.deck-btn .owner-tag {
+  position: absolute;
+  bottom: 1px;
+  right: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--foreground);
+  opacity: 0.9;
+}
+
+/* Subtle range / progress / table enhancements */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-track {
+  height: 0.45rem;
+  border-radius: 9999px;
+  background: var(--content);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 260ms ease;
+}
+
+/* Clean custom scrollbar for hand history */
+.hand-log-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased m-0 p-0 four-color-deck">
+  <div class="max-w-6xl mx-auto px-4 py-5 space-y-5">
+    <!-- Header Bar -->
+    <header class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-[var(--foreground)]">Texas Hold'em Simulator</h1>
+        <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+          Configure seats, hole cards, board, and player types to compare strategy-adjusted EV against raw showdown equity.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+          <span>Preset:</span>
+          <select
+            id="preset-select"
+            aria-label="Load preset scenario"
+            class="px-2.5 py-1.5 text-xs rounded-md bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)] max-w-[270px]"
+          ></select>
+        </label>
+        <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[var(--card)] border border-[var(--border)] text-xs text-[var(--foreground)] cursor-pointer select-none">
+          <input id="four-color-toggle" type="checkbox" checked class="accent-[var(--primary)]" />
+          <span>4-Color Deck</span>
+        </label>
+        <button
+          id="reset-btn"
+          type="button"
+          class="px-2.5 py-1.5 text-xs font-medium rounded-md bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--content)]"
+        >
+          Reset
+        </button>
+      </div>
+    </header>
+
+    <!-- Validation Error Banner -->
+    <div
+      id="error-banner"
+      role="alert"
+      class="hidden px-3 py-2 rounded-lg text-xs font-medium border"
+      style="border-color: var(--error); color: var(--error); background: var(--card);"
+    ></div>
+
+    <!-- Main Setup Workspace -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+      <!-- Left: Table Settings, Board, and Seats -->
+      <div class="lg:col-span-7 space-y-4">
+        <!-- Table Settings Card -->
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <div class="flex flex-wrap items-center gap-3 justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-medium text-[var(--muted-foreground)]">Players</span>
+              <div class="inline-flex items-center rounded-md border border-[var(--border)] bg-[var(--content)]">
+                <button
+                  id="dec-players-btn"
+                  type="button"
+                  aria-label="Decrease players"
+                  class="px-2.5 py-1 text-xs font-bold text-[var(--foreground)] hover:bg-[var(--card)] rounded-l-md"
+                >−</button>
+                <span id="player-count-val" class="px-2.5 py-1 text-xs font-mono font-bold tabular-nums text-[var(--foreground)]">4</span>
+                <button
+                  id="inc-players-btn"
+                  type="button"
+                  aria-label="Increase players"
+                  class="px-2.5 py-1 text-xs font-bold text-[var(--foreground)] hover:bg-[var(--card)] rounded-r-md"
+                >+</button>
+              </div>
+            </div>
+
+            <label class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+              <span>Trials</span>
+              <select
+                id="trials-select"
+                class="px-2 py-1 text-xs rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)] tabular-nums"
+              >
+                <option value="1000">1,000</option>
+                <option value="5000">5,000</option>
+                <option value="10000" selected>10,000</option>
+                <option value="25000">25,000</option>
+                <option value="50000">50,000</option>
+                <option value="100000">100,000</option>
+              </select>
+            </label>
+
+            <label class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+              <span>Stack</span>
+              <input
+                id="stack-input"
+                type="number"
+                min="5"
+                max="1000"
+                step="5"
+                value="100"
+                class="w-16 px-2 py-1 text-xs text-right tabular-nums rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)]"
+              />
+              <span>BB</span>
+            </label>
+
+            <label id="starting-pot-group" class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]" title="Pot size already in middle when starting on Flop/Turn/River">
+              <span>Start Pot</span>
+              <input
+                id="pot-input"
+                type="number"
+                min="2"
+                max="500"
+                step="1"
+                value="12"
+                class="w-14 px-2 py-1 text-xs text-right tabular-nums rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)]"
+              />
+              <span>BB</span>
+            </label>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--card-border)]">
+            <label class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+              <span>Board Mode</span>
+              <select
+                id="mode-select"
+                class="px-2 py-1 text-xs rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)]"
+              >
+                <option value="street">Start betting at board street</option>
+                <option value="preflop">Play from preflop (lock future board)</option>
+              </select>
+            </label>
+
+            <label class="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+              <span>Seed</span>
+              <input
+                id="seed-input"
+                type="text"
+                placeholder="Random"
+                class="w-24 px-2 py-1 text-xs rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)] placeholder:text-[var(--placeholder)]"
+              />
+            </label>
+          </div>
+        </div>
+
+        <!-- Community Cards Card -->
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-sm font-semibold text-[var(--foreground)]">Community Cards</h2>
+              <p class="text-xs text-[var(--muted-foreground)]">Leave slots as <span class="font-mono">?</span> to deal randomly on each run.</p>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button
+                id="random-flop-btn"
+                type="button"
+                class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--card)]"
+              >
+                Random Flop
+              </button>
+              <button
+                id="clear-board-btn"
+                type="button"
+                class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              >
+                Clear Board
+              </button>
+            </div>
+          </div>
+          <div id="board-slots" class="flex flex-wrap items-center gap-2"></div>
+        </div>
+
+        <!-- Player Seats Card -->
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-sm font-semibold text-[var(--foreground)]">Players & Archetypes</h2>
+              <p class="text-xs text-[var(--muted-foreground)]">Click any card slot, then pick a card from the deck on the right.</p>
+            </div>
+          </div>
+          <div id="seats-container" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"></div>
+        </div>
+      </div>
+
+      <!-- Right: Sticky 52-Card Deck Picker & Run Action -->
+      <div class="lg:col-span-5 lg:sticky lg:top-4 space-y-4">
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <div class="text-xs text-[var(--muted-foreground)]">Active Slot</div>
+              <div id="picker-target-label" class="text-sm font-semibold text-[var(--foreground)] truncate"></div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button
+                id="set-random-slot-btn"
+                type="button"
+                class="px-2 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--card)]"
+                title="Set active slot to unknown/random (Backspace)"
+              >
+                Set Random (?)
+              </button>
+              <button
+                id="clear-all-cards-btn"
+                type="button"
+                class="px-2 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+
+          <!-- 4 x 13 Card Grid -->
+          <div id="deck-picker-grid" class="space-y-1.5"></div>
+
+          <p class="text-xs text-[var(--muted-foreground)]">
+            Tip: Assigning a card auto-advances to the next empty slot. Press <kbd class="px-1 py-0.5 rounded bg-[var(--content)] border border-[var(--border)] font-mono">Backspace</kbd> to clear a slot.
+          </p>
+
+          <!-- Primary Run Bar -->
+          <div class="pt-3 border-t border-[var(--card-border)] space-y-2.5">
+            <div class="flex items-center gap-2">
+              <button
+                id="run-sim-btn"
+                type="button"
+                class="flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-95 transition-opacity disabled:opacity-60 cursor-pointer"
+              >
+                Run 10,000 Hands
+              </button>
+              <button
+                id="copy-json-btn"
+                type="button"
+                class="px-3 py-2.5 text-xs font-medium rounded-lg bg-[var(--content)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--card)] shrink-0"
+                title="Copy scenario JSON configuration"
+              >
+                Copy JSON
+              </button>
+            </div>
+
+            <div id="sim-progress-wrap" class="hidden space-y-1">
+              <div class="bar-track">
+                <div id="sim-progress-bar" class="bar-fill" style="width: 0%; background: var(--primary);"></div>
+              </div>
+              <div id="sim-progress-text" class="text-xs text-[var(--muted-foreground)] tabular-nums text-right"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Player Type Configuration (Live Tunable Parameters) -->
+    <section id="archetype-config-section" class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[var(--card-border)]">
+        <div>
+          <h2 class="text-sm font-semibold text-[var(--foreground)]">Player Type Configuration</h2>
+          <p class="text-xs text-[var(--muted-foreground)]">
+            Inspect and adjust exact behavioral rules for each archetype—changes apply directly on the next simulation run.
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button
+            id="reset-arch-btn"
+            type="button"
+            class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          >
+            Reset Selected
+          </button>
+          <button
+            id="reset-all-arch-btn"
+            type="button"
+            class="px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--content)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          >
+            Reset All Defaults
+          </button>
+          <button
+            id="apply-arch-run-btn"
+            type="button"
+            class="px-3 py-1 text-xs font-semibold rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-95"
+          >
+            Apply &amp; Re-run
+          </button>
+        </div>
+      </div>
+
+      <!-- Archetype Tabs -->
+      <div id="archetype-tabs" class="flex flex-wrap items-center gap-1.5"></div>
+
+      <!-- Selected Archetype Sliders + All-Types Comparison Matrix -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        <div class="lg:col-span-6 space-y-2.5">
+          <div id="archetype-selected-desc" class="text-xs text-[var(--muted-foreground)]"></div>
+          <div id="archetype-sliders" class="space-y-3"></div>
+        </div>
+        <div class="lg:col-span-6 rounded-lg bg-[var(--content)] border border-[var(--card-border)] overflow-hidden">
+          <div class="px-3 py-2 border-b border-[var(--card-border)] flex items-center justify-between">
+            <span class="text-xs font-semibold text-[var(--foreground)]">All Player Types Comparison</span>
+            <span class="text-xs text-[var(--muted-foreground)]">Click a row to edit</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs tabular-nums">
+              <thead>
+                <tr class="border-b border-[var(--card-border)] text-[var(--muted-foreground)]">
+                  <th class="py-2 px-2.5 font-semibold">Type</th>
+                  <th class="py-2 px-1.5 text-right" title="Preflop Looseness (VPIP)">VPIP</th>
+                  <th class="py-2 px-1.5 text-right" title="Preflop Raise / 3-Bet">PreAgg</th>
+                  <th class="py-2 px-1.5 text-right" title="Postflop Tightness (Fold to Bets)">Fold</th>
+                  <th class="py-2 px-1.5 text-right" title="Draw Chasing">Draws</th>
+                  <th class="py-2 px-1.5 text-right" title="Postflop Bet / Raise">PostAgg</th>
+                  <th class="py-2 px-1.5 text-right" title="Bluff Frequency">Bluff</th>
+                  <th class="py-2 px-2 text-right" title="Bet Sizing (% of Pot)">Size</th>
+                </tr>
+              </thead>
+              <tbody id="archetype-matrix-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results Dashboard -->
+    <section id="results-section" class="hidden space-y-4 pt-1">
+      <div class="flex items-center justify-between gap-2">
+        <h2 class="text-base font-bold text-[var(--foreground)]">Simulation Results</h2>
+        <span class="text-xs text-[var(--muted-foreground)]">
+          Actual Win% includes fold equity · Raw Equity% assumes all players reach showdown
+        </span>
+      </div>
+
+      <!-- KPI Summary Strip -->
+      <div id="results-kpis" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
+
+      <!-- Per-Player Table -->
+      <div class="rounded-xl bg-[var(--card)] border border-[var(--border)] overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-[var(--content)] text-xs font-semibold text-[var(--muted-foreground)]">
+                <th class="py-2.5 px-3">Player</th>
+                <th class="py-2.5 px-2">Cards</th>
+                <th class="py-2.5 px-3">Actual Win %</th>
+                <th class="py-2.5 px-3">Raw Equity % (Δ)</th>
+                <th class="py-2.5 px-3 text-right">EV / Hand</th>
+                <th class="py-2.5 px-2.5 text-right" title="Percentage of hands folded before showdown">Fold%</th>
+                <th class="py-2.5 px-2.5 text-right" title="Went To Showdown %">WTSD%</th>
+                <th class="py-2.5 px-2.5 text-right" title="Voluntarily Put Money In Pot %">VPIP%</th>
+                <th class="py-2.5 px-3 text-right" title="Bet/Raise share of all non-fold actions">Agg%</th>
+              </tr>
+            </thead>
+            <tbody id="results-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Street & Hand Rank Breakdown -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <h3 class="text-sm font-semibold text-[var(--foreground)]">Where Hands Ended</h3>
+          <div id="street-breakdown" class="space-y-2.5"></div>
+        </div>
+        <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <h3 class="text-sm font-semibold text-[var(--foreground)]">Showdown Winning Hand Ranks</h3>
+          <div id="hand-rank-breakdown" class="space-y-1.5"></div>
+        </div>
+      </div>
+
+      <!-- Sample Hand Histories -->
+      <div class="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-semibold text-[var(--foreground)]">Sample Hand Histories</h3>
+            <p class="text-xs text-[var(--muted-foreground)]">Inspect actual play-by-play decisions made by each player archetype.</p>
+          </div>
+          <div id="sample-hand-tabs" class="flex flex-wrap items-center gap-1.5"></div>
+        </div>
+        <div id="sample-hand-body"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+'use strict';
+
+// === src/cards.js ===
+const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
+const SUITS = ['s', 'h', 'd', 'c'];
+const SUIT_SYMBOLS = { s: '♠', h: '♥', d: '♦', c: '♣' };
+const SUIT_NAMES = { s: 'Spades', h: 'Hearts', d: 'Diamonds', c: 'Clubs' };
+
+const RANK_MAP = new Map(RANKS.map((r, i) => [r, i]));
+const SUIT_MAP = new Map(SUITS.map((s, i) => [s, i]));
+function makeCard(rank, suit) {
+  return (rank << 2) | suit;
+}
+function cardRank(card) {
+  return card >> 2;
+}
+function cardSuit(card) {
+  return card & 3;
+}
+function cardToString(card) {
+  if (card === null || card === undefined || card < 0) return '??';
+  return RANKS[card >> 2] + SUITS[card & 3];
+}
+function cardToPretty(card) {
+  if (card === null || card === undefined || card < 0) return '?';
+  return RANKS[card >> 2] + SUIT_SYMBOLS[SUITS[card & 3]];
+}
+function stringToCard(raw) {
+  if (raw === null || raw === undefined) return null;
+  const s = String(raw).trim();
+  if (!s || s === '?' || s === '??') return null;
+
+  let rankChar;
+  let suitChar;
+  if (s.length === 3 && s.startsWith('10')) {
+    rankChar = 'T';
+    suitChar = s[2].toLowerCase();
+  } else if (s.length === 2) {
+    rankChar = s[0].toUpperCase();
+    suitChar = s[1].toLowerCase();
+  } else {
+    throw new Error(`Invalid card notation: "${raw}"`);
+  }
+
+  // Allow Unicode suit symbols as input
+  if (suitChar === '♠') suitChar = 's';
+  else if (suitChar === '♥') suitChar = 'h';
+  else if (suitChar === '♦') suitChar = 'd';
+  else if (suitChar === '♣') suitChar = 'c';
+
+  const r = RANK_MAP.get(rankChar);
+  const su = SUIT_MAP.get(suitChar);
+  if (r === undefined || su === undefined) {
+    throw new Error(`Invalid card notation: "${raw}"`);
+  }
+  return (r << 2) | su;
+}
+
+/**
+ * Parse hole cards or board cards from string ("As Kh", "AsKh", "As ?", "") or array.
+ */
+function parseCardList(input, expectedCount = null) {
+  let tokens = [];
+  if (input === null || input === undefined) {
+    tokens = [];
+  } else if (Array.isArray(input)) {
+    tokens = input;
+  } else if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (!trimmed) {
+      tokens = [];
+    } else if (trimmed.includes(' ') || trimmed.includes(',')) {
+      tokens = trimmed.split(/[\s,]+/).filter(Boolean);
+    } else {
+      // Compact string like "AsKh" or "Ah7d2c" or "??"
+      if (trimmed === '??' || trimmed === '?') {
+        tokens = [null, null];
+      } else {
+        let i = 0;
+        while (i < trimmed.length) {
+          if (trimmed[i] === '?') {
+            tokens.push(null);
+            i += 1;
+          } else if (trimmed.slice(i, i + 2) === '10' && i + 2 < trimmed.length) {
+            tokens.push(trimmed.slice(i, i + 3));
+            i += 3;
+          } else if (i + 1 < trimmed.length) {
+            tokens.push(trimmed.slice(i, i + 2));
+            i += 2;
+          } else {
+            throw new Error(`Malformed card string: "${input}"`);
+          }
+        }
+      }
+    }
+  } else {
+    throw new Error(`Unsupported card list input: ${typeof input}`);
+  }
+
+  const parsed = tokens.map((tok) => (typeof tok === 'number' ? tok : stringToCard(tok)));
+
+  if (expectedCount !== null) {
+    if (parsed.length > expectedCount) {
+      throw new Error(`Expected at most ${expectedCount} cards, got ${parsed.length}`);
+    }
+    while (parsed.length < expectedCount) {
+      parsed.push(null);
+    }
+  }
+  return parsed;
+}
+
+/**
+ * Validates that no duplicate cards exist across all players and community cards,
+ * and builds the remaining undealt deck.
+ */
+function buildRemainingDeck(playerHoleCards, boardCards) {
+  const used = new Uint8Array(52);
+  const check = (card, label) => {
+    if (card === null || card === undefined) return;
+    if (!Number.isInteger(card) || card < 0 || card > 51) {
+      throw new Error(`Invalid card id ${card} in ${label}`);
+    }
+    if (used[card]) {
+      throw new Error(`Duplicate card ${cardToString(card)} found in ${label}`);
+    }
+    used[card] = 1;
+  };
+
+  playerHoleCards.forEach((hole, idx) => {
+    if (!Array.isArray(hole) || hole.length !== 2) {
+      throw new Error(`Player ${idx + 1} must have exactly 2 hole-card slots`);
+    }
+    check(hole[0], `Player ${idx + 1}`);
+    check(hole[1], `Player ${idx + 1}`);
+  });
+
+  if (boardCards.length > 5) {
+    throw new Error(`Community board can have at most 5 cards, got ${boardCards.length}`);
+  }
+  boardCards.forEach((c) => check(c, 'community board'));
+
+  const remaining = [];
+  for (let c = 0; c < 52; c++) {
+    if (!used[c]) remaining.push(c);
+  }
+
+  // Count how many random cards are needed
+  let needed = 0;
+  for (const hole of playerHoleCards) {
+    if (hole[0] === null) needed++;
+    if (hole[1] === null) needed++;
+  }
+  for (let i = 0; i < 5; i++) {
+    if (i >= boardCards.length || boardCards[i] === null) needed++;
+  }
+  if (needed > remaining.length) {
+    throw new Error(`Not enough cards left in deck (need ${needed}, have ${remaining.length})`);
+  }
+
+  return new Int8Array(remaining);
+}
+
+/**
+ * Fast deterministic PRNG (Mulberry32). If seed is null/undefined, uses Math.random.
+ */
+function createRng(seed) {
+  if (seed === null || seed === undefined || seed === '') {
+    return Math.random;
+  }
+  let a = (typeof seed === 'number' ? seed : hashString(String(seed))) >>> 0;
+  return function rng() {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashString(str) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Partial Fisher-Yates shuffle: shuffles the first `count` positions of `arr` in-place.
+ */
+function drawRandomCards(deck, count, rng) {
+  const n = deck.length;
+  for (let i = 0; i < count; i++) {
+    const j = i + Math.floor(rng() * (n - i));
+    const tmp = deck[i];
+    deck[i] = deck[j];
+    deck[j] = tmp;
+  }
+}
+function getPositionNames(numPlayers) {
+  switch (numPlayers) {
+    case 2: return ['BTN/SB', 'BB'];
+    case 3: return ['BTN', 'SB', 'BB'];
+    case 4: return ['BTN', 'SB', 'BB', 'CO'];
+    case 5: return ['BTN', 'SB', 'BB', 'UTG', 'CO'];
+    case 6: return ['BTN', 'SB', 'BB', 'UTG', 'HJ', 'CO'];
+    case 7: return ['BTN', 'SB', 'BB', 'UTG', 'MP', 'HJ', 'CO'];
+    case 8: return ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'HJ', 'CO'];
+    case 9: return ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'LJ', 'HJ', 'CO'];
+    default:
+      return Array.from({ length: numPlayers }, (_, i) => `Seat ${i + 1}`);
+  }
+}
+
+// === src/evaluator.js ===
+const HAND_CATEGORIES = [
+  'High Card',
+  'One Pair',
+  'Two Pair',
+  'Three of a Kind',
+  'Straight',
+  'Flush',
+  'Full House',
+  'Four of a Kind',
+  'Straight Flush',
+];
+
+// Precomputed 13-bit lookup tables (2^13 = 8192)
+const STRAIGHT_HIGH = new Int8Array(8192);
+const TOP5_SCORE = new Int32Array(8192);
+
+(function initTables() {
+  STRAIGHT_HIGH.fill(-1);
+  const wheelMask = (1 << 12) | 0x0f; // A-2-3-4-5
+
+  for (let mask = 0; mask < 8192; mask++) {
+    // Highest straight
+    for (let high = 12; high >= 4; high--) {
+      const pattern = 0x1f << (high - 4);
+      if ((mask & pattern) === pattern) {
+        STRAIGHT_HIGH[mask] = high;
+        break;
+      }
+    }
+    if (STRAIGHT_HIGH[mask] === -1 && (mask & wheelMask) === wheelMask) {
+      STRAIGHT_HIGH[mask] = 3; // 5-high wheel straight
+    }
+
+    // Top 5 ranks packed into 20 bits (4 bits each)
+    let packed = 0;
+    let picked = 0;
+    for (let r = 12; r >= 0 && picked < 5; r--) {
+      if (mask & (1 << r)) {
+        packed = (packed << 4) | r;
+        picked++;
+      }
+    }
+    while (picked < 5) {
+      packed <<= 4;
+      picked++;
+    }
+    TOP5_SCORE[mask] = packed;
+  }
+})();
+
+// Reusable scratch arrays for zero-allocation evaluation
+const _rankCounts = new Int8Array(13);
+const _suitCounts = new Int8Array(4);
+const _suitMasks = new Int16Array(4);
+
+/**
+ * Evaluates 5, 6, or 7 cards into a comparable 32-bit integer score.
+ * Higher score strictly beats lower score; equal scores are exact ties.
+ */
+function evaluateHand(cards, len = cards.length) {
+  _rankCounts.fill(0);
+  _suitCounts.fill(0);
+  _suitMasks.fill(0);
+
+  let allMask = 0;
+  for (let i = 0; i < len; i++) {
+    const c = cards[i];
+    const r = c >> 2;
+    const s = c & 3;
+    const bit = 1 << r;
+    _rankCounts[r]++;
+    _suitCounts[s]++;
+    _suitMasks[s] |= bit;
+    allMask |= bit;
+  }
+
+  // Check flush / straight flush
+  let flushSuit = -1;
+  for (let s = 0; s < 4; s++) {
+    if (_suitCounts[s] >= 5) {
+      flushSuit = s;
+      break;
+    }
+  }
+
+  if (flushSuit !== -1) {
+    const sfHigh = STRAIGHT_HIGH[_suitMasks[flushSuit]];
+    if (sfHigh !== -1) {
+      return (8 << 20) | (sfHigh << 16);
+    }
+  }
+
+  // Scan ranks high-to-low to collect quads, trips, pairs
+  let quad = -1;
+  let trip1 = -1;
+  let trip2 = -1;
+  let pair1 = -1;
+  let pair2 = -1;
+
+  for (let r = 12; r >= 0; r--) {
+    const cnt = _rankCounts[r];
+    if (cnt === 4) {
+      quad = r;
+    } else if (cnt === 3) {
+      if (trip1 === -1) trip1 = r;
+      else if (trip2 === -1) trip2 = r;
+    } else if (cnt === 2) {
+      if (pair1 === -1) pair1 = r;
+      else if (pair2 === -1) pair2 = r;
+    }
+  }
+
+  // 7: Four of a Kind
+  if (quad !== -1) {
+    let kicker = 0;
+    for (let r = 12; r >= 0; r--) {
+      if (r !== quad && _rankCounts[r] > 0) {
+        kicker = r;
+        break;
+      }
+    }
+    return (7 << 20) | (quad << 16) | (kicker << 12);
+  }
+
+  // 6: Full House
+  if (trip1 !== -1 && (trip2 !== -1 || pair1 !== -1)) {
+    const housePair = trip2 > pair1 ? trip2 : pair1;
+    return (6 << 20) | (trip1 << 16) | (housePair << 12);
+  }
+
+  // 5: Flush
+  if (flushSuit !== -1) {
+    return (5 << 20) | TOP5_SCORE[_suitMasks[flushSuit]];
+  }
+
+  // 4: Straight
+  const stHigh = STRAIGHT_HIGH[allMask];
+  if (stHigh !== -1) {
+    return (4 << 20) | (stHigh << 16);
+  }
+
+  // 3: Three of a Kind
+  if (trip1 !== -1) {
+    let k1 = 0;
+    let k2 = 0;
+    let found = 0;
+    for (let r = 12; r >= 0; r--) {
+      if (r !== trip1 && _rankCounts[r] > 0) {
+        if (found === 0) k1 = r;
+        else {
+          k2 = r;
+          break;
+        }
+        found++;
+      }
+    }
+    return (3 << 20) | (trip1 << 16) | (k1 << 12) | (k2 << 8);
+  }
+
+  // 2: Two Pair (handles 3-pair boards properly by picking highest remaining card as kicker)
+  if (pair1 !== -1 && pair2 !== -1) {
+    let kicker = 0;
+    for (let r = 12; r >= 0; r--) {
+      if (r !== pair1 && r !== pair2 && _rankCounts[r] > 0) {
+        kicker = r;
+        break;
+      }
+    }
+    return (2 << 20) | (pair1 << 16) | (pair2 << 12) | (kicker << 8);
+  }
+
+  // 1: One Pair
+  if (pair1 !== -1) {
+    let k1 = 0;
+    let k2 = 0;
+    let k3 = 0;
+    let found = 0;
+    for (let r = 12; r >= 0; r--) {
+      if (r !== pair1 && _rankCounts[r] > 0) {
+        if (found === 0) k1 = r;
+        else if (found === 1) k2 = r;
+        else {
+          k3 = r;
+          break;
+        }
+        found++;
+      }
+    }
+    return (1 << 20) | (pair1 << 16) | (k1 << 12) | (k2 << 8) | (k3 << 4);
+  }
+
+  // 0: High Card
+  return TOP5_SCORE[allMask];
+}
+function scoreCategory(score) {
+  return score >> 20;
+}
+function describeHandScore(score) {
+  const cat = score >> 20;
+  const r1 = (score >> 16) & 0x0f;
+  const r2 = (score >> 12) & 0x0f;
+  const rn = (r) => RANKS[r] || '?';
+
+  switch (cat) {
+    case 8:
+      return r1 === 12 ? 'Royal Flush' : `Straight Flush (${rn(r1)}-high)`;
+    case 7:
+      return `Four of a Kind (${rn(r1)}s)`;
+    case 6:
+      return `Full House (${rn(r1)}s full of ${rn(r2)}s)`;
+    case 5:
+      return `Flush (${rn(r1)}-high)`;
+    case 4:
+      return `Straight (${rn(r1)}-high)`;
+    case 3:
+      return `Three of a Kind (${rn(r1)}s)`;
+    case 2:
+      return `Two Pair (${rn(r1)}s & ${rn(r2)}s)`;
+    case 1:
+      return `Pair of ${rn(r1)}s`;
+    default:
+      return `${rn(r1)}-High`;
+  }
+}
+
+/**
+ * Preflop hand strength heuristic in [0.04, 1.00] (Chen-formula inspired).
+ */
+function evaluatePreflopStrength(c1, c2) {
+  let r1 = c1 >> 2;
+  let r2 = c2 >> 2;
+  const suited = (c1 & 3) === (c2 & 3);
+  if (r2 > r1) {
+    const tmp = r1;
+    r1 = r2;
+    r2 = tmp;
+  }
+
+  // Base high-card points (A=10, K=8, Q=7, J=6, T=5, 9..2 = rank/2)
+  const highPts = (r) => {
+    if (r === 12) return 10;
+    if (r === 11) return 8;
+    if (r === 10) return 7;
+    if (r === 9) return 6;
+    return (r + 2) / 2;
+  };
+
+  let score = highPts(r1);
+  const isPair = r1 === r2;
+
+  if (isPair) {
+    score = Math.max(5.5, score * 2);
+    if (r1 === 3) score = Math.max(score, 6); // 55
+  } else {
+    if (suited) score += 2.0;
+
+    const gap = r1 - r2 - 1;
+    if (gap === 1) score -= 1;
+    else if (gap === 2) score -= 2;
+    else if (gap === 3) score -= 4;
+    else if (gap >= 4) score -= 5;
+
+    // Straight bonus for connected low/mid cards (e.g. T9s, 98s, 76s, QJ)
+    if (gap <= 1 && r1 < 10) {
+      score += 1;
+    }
+    // Wheel-ace suited bonus (A5s-A2s)
+    if (r1 === 12 && r2 <= 3 && suited) {
+      score += 1.5;
+    }
+  }
+
+  // Map roughly [-2, 20] -> [0.04, 1.00]
+  const norm = (score + 2.0) / 22.0;
+  return Math.max(0.04, Math.min(1.0, norm));
+}
+
+const _evalBuf = new Int8Array(7);
+const _boardRankCounts = new Int8Array(13);
+const _boardSuitCounts = new Int8Array(4);
+const _fullSuitCounts = new Int8Array(4);
+
+/**
+ * Evaluates postflop effective hand strength in [0.05, 1.00], incorporating
+ * made-hand quality relative to board texture plus flop/turn draw potential.
+ */
+function evaluatePostflopStrength(hole0, hole1, board, boardLen) {
+  _evalBuf[0] = hole0;
+  _evalBuf[1] = hole1;
+  _boardRankCounts.fill(0);
+  _boardSuitCounts.fill(0);
+  _fullSuitCounts.fill(0);
+
+  let boardMask = 0;
+  let boardHighRank = -1;
+  let boardSecondRank = -1;
+
+  for (let i = 0; i < boardLen; i++) {
+    const c = board[i];
+    _evalBuf[2 + i] = c;
+    const r = c >> 2;
+    const s = c & 3;
+    _boardRankCounts[r]++;
+    _boardSuitCounts[s]++;
+    _fullSuitCounts[s]++;
+    boardMask |= 1 << r;
+    if (r > boardHighRank) {
+      boardSecondRank = boardHighRank;
+      boardHighRank = r;
+    } else if (r > boardSecondRank && r !== boardHighRank) {
+      boardSecondRank = r;
+    }
+  }
+
+  const h0r = hole0 >> 2;
+  const h1r = hole1 >> 2;
+  const h0s = hole0 & 3;
+  const h1s = hole1 & 3;
+  _fullSuitCounts[h0s]++;
+  _fullSuitCounts[h1s]++;
+  const allMask = boardMask | (1 << h0r) | (1 << h1r);
+
+  const score = evaluateHand(_evalBuf, 2 + boardLen);
+  const cat = score >> 20;
+  const primaryRank = (score >> 16) & 0x0f;
+  const secondaryRank = (score >> 12) & 0x0f;
+
+  // Check if board itself is paired / trips / flushy
+  let boardMaxDup = 1;
+  let boardPairRank = -1;
+  for (let r = 12; r >= 0; r--) {
+    if (_boardRankCounts[r] > boardMaxDup) {
+      boardMaxDup = _boardRankCounts[r];
+      boardPairRank = r;
+    }
+  }
+
+  let strength = 0.12;
+  const highHole = h0r > h1r ? h0r : h1r;
+  const lowHole = h0r > h1r ? h1r : h0r;
+
+  if (cat >= 7) {
+    strength = 0.99;
+  } else if (cat === 6) {
+    strength = 0.95 + (primaryRank / 12) * 0.03;
+  } else if (cat === 5) {
+    // Flush: check if we actually hold a card of the flush suit
+    let flushSuit = -1;
+    for (let s = 0; s < 4; s++) {
+      if (_fullSuitCounts[s] >= 5) {
+        flushSuit = s;
+        break;
+      }
+    }
+    const holeFlushCards = (h0s === flushSuit ? 1 : 0) + (h1s === flushSuit ? 1 : 0);
+    if (holeFlushCards === 0) {
+      strength = 0.45; // Playing board flush
+    } else {
+      const bestSuitRank =
+        h0s === flushSuit && h1s === flushSuit
+          ? highHole
+          : h0s === flushSuit
+            ? h0r
+            : h1r;
+      strength = 0.85 + (bestSuitRank / 12) * 0.09;
+    }
+  } else if (cat === 4) {
+    const boardStraight = STRAIGHT_HIGH[boardMask];
+    if (boardStraight === primaryRank) {
+      strength = 0.48; // Playing board straight
+    } else {
+      strength = 0.80 + (primaryRank / 12) * 0.08;
+    }
+  } else if (cat === 3) {
+    if (boardMaxDup >= 3 && primaryRank === boardPairRank) {
+      // Board trips; strength depends on kicker
+      strength = 0.36 + (highHole / 12) * 0.18;
+    } else if (h0r === h1r && h0r === primaryRank) {
+      // Pocket set!
+      strength = 0.81 + (primaryRank / 12) * 0.07;
+    } else {
+      // Trips using 1 hole card + board pair
+      const kicker = h0r === primaryRank ? h1r : h0r;
+      strength = 0.72 + (primaryRank / 12) * 0.06 + (kicker / 12) * 0.04;
+    }
+  } else if (cat === 2) {
+    // Two pair
+    const boardPairs = _boardRankCounts[primaryRank] >= 2 || _boardRankCounts[secondaryRank] >= 2;
+    const bothBoardPairs =
+      _boardRankCounts[primaryRank] >= 2 && _boardRankCounts[secondaryRank] >= 2;
+    if (bothBoardPairs) {
+      strength = 0.30 + (highHole / 12) * 0.16;
+    } else if (boardPairs) {
+      // One board pair + one of our own pairs
+      const ownPair = _boardRankCounts[primaryRank] >= 2 ? secondaryRank : primaryRank;
+      if (ownPair >= boardHighRank) strength = 0.67 + (ownPair / 12) * 0.06;
+      else strength = 0.56 + (ownPair / 12) * 0.06;
+    } else {
+      // True two pair using both hole cards
+      strength = 0.72 + (primaryRank / 12) * 0.06 + (secondaryRank / 12) * 0.04;
+    }
+  } else if (cat === 1) {
+    // One pair
+    if (boardMaxDup === 2 && primaryRank === boardPairRank) {
+      // Just playing board pair (effectively high card)
+      strength = 0.20 + (highHole / 12) * 0.14 + (lowHole / 12) * 0.04;
+    } else if (h0r === h1r) {
+      // Pocket pair
+      if (h0r > boardHighRank) {
+        // Overpair
+        strength = 0.67 + (h0r / 12) * 0.10;
+      } else if (h0r > boardSecondRank) {
+        // Between top and second board card
+        strength = 0.48 + (h0r / 12) * 0.08;
+      } else {
+        // Underpair
+        strength = 0.36 + (h0r / 12) * 0.08;
+      }
+    } else {
+      // Paired a board card
+      const kicker = h0r === primaryRank ? h1r : h0r;
+      if (primaryRank === boardHighRank) {
+        // Top pair
+        strength = 0.56 + (kicker / 12) * 0.14;
+      } else if (primaryRank === boardSecondRank) {
+        // Middle pair
+        strength = 0.43 + (kicker / 12) * 0.09;
+      } else {
+        // Bottom/low pair
+        strength = 0.34 + (kicker / 12) * 0.08;
+      }
+    }
+  } else {
+    // High card
+    strength = 0.10 + (highHole / 12) * 0.13 + (lowHole / 12) * 0.05;
+  }
+
+  const madeStrength = Math.max(0.05, Math.min(1.0, strength));
+
+  // Draw potential on Flop (3) and Turn (4)
+  let hasStrongDraw = false;
+  let hasWeakDraw = false;
+  let drawBoost = 0;
+
+  if (boardLen < 5 && cat < 5) {
+    const streetScale = boardLen === 3 ? 1.0 : 0.52;
+
+    // Flush draw (4 of a suit with at least 1 hole card contributing)
+    for (let s = 0; s < 4; s++) {
+      if (_fullSuitCounts[s] === 4 && (h0s === s || h1s === s)) {
+        drawBoost += 0.22 * streetScale;
+        hasStrongDraw = true;
+        break;
+      }
+    }
+
+    // Straight draw (only if not already a straight)
+    if (cat < 4) {
+      let straightRankOuts = 0;
+      for (let r = 0; r < 13; r++) {
+        const bit = 1 << r;
+        if (allMask & bit) continue;
+        const newSt = STRAIGHT_HIGH[allMask | bit];
+        if (newSt !== -1 && newSt > STRAIGHT_HIGH[boardMask | bit]) {
+          straightRankOuts++;
+        }
+      }
+      if (straightRankOuts >= 2) {
+        drawBoost += 0.19 * streetScale;
+        hasStrongDraw = true;
+      } else if (straightRankOuts === 1) {
+        drawBoost += 0.09 * streetScale;
+        hasWeakDraw = true;
+      }
+    }
+
+    // Two overcards to the board on flop/turn
+    if (cat === 0 && lowHole > boardHighRank) {
+      drawBoost += 0.09 * streetScale;
+      hasWeakDraw = true;
+    }
+
+    strength = Math.min(0.86, madeStrength + drawBoost * (1 - madeStrength * 0.45));
+  }
+
+  return {
+    strength: Math.max(0.05, Math.min(1.0, strength)),
+    madeStrength,
+    drawBoost,
+    category: cat,
+    hasStrongDraw,
+    hasWeakDraw,
+  };
+}
+
+// === src/archetypes.js ===
+const ARCHETYPE_PARAM_DEFS = [
+  {
+    key: 'preflopLooseness',
+    label: 'Preflop Looseness (VPIP)',
+    min: 5,
+    max: 95,
+    step: 1,
+    unit: '%',
+    desc: 'How wide of a starting hand range this player enters pots with preflop.',
+  },
+  {
+    key: 'preflopAggression',
+    label: 'Preflop Raise / 3-Bet',
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: '%',
+    desc: 'Tendency to open-raise and 3-bet instead of limping or flat-calling.',
+  },
+  {
+    key: 'foldToPressure',
+    label: 'Postflop Tightness (Fold to Bets)',
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: '%',
+    desc: 'How readily this player folds pairs and marginal hands facing bets or raises.',
+  },
+  {
+    key: 'drawDefense',
+    label: 'Draw Chasing',
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: '%',
+    desc: 'Willingness to call bets/raises on flush or straight draws (low = folds draws under fire).',
+  },
+  {
+    key: 'postflopAggression',
+    label: 'Postflop Bet / Raise',
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: '%',
+    desc: 'How aggressively this player value-bets, c-bets, and raises postflop.',
+  },
+  {
+    key: 'bluffFreq',
+    label: 'Bluff Frequency',
+    min: 0,
+    max: 80,
+    step: 1,
+    unit: '%',
+    desc: 'How often this player fires pure bluffs or semi-bluff raises without a strong made hand.',
+  },
+  {
+    key: 'betSizePct',
+    label: 'Bet Sizing (% of Pot)',
+    min: 25,
+    max: 150,
+    step: 5,
+    unit: '%',
+    desc: 'Typical bet size as a percentage of the current pot.',
+  },
+];
+const ARCHETYPES = {
+  calling_station: {
+    id: 'calling_station',
+    name: 'Calling Station',
+    shortName: 'Station',
+    tagline: 'Loose-Passive · Calls wide, chases draws, rarely raises',
+    description:
+      'Plays a wide range and hates folding once connected with any pair or draw. Seldom bets aggressively or bluffs.',
+    params: {
+      preflopLooseness: 72,
+      preflopAggression: 8,
+      foldToPressure: 10,
+      drawDefense: 94,
+      postflopAggression: 10,
+      bluffFreq: 2,
+      betSizePct: 50,
+    },
+  },
+  aggressive: {
+    id: 'aggressive',
+    name: 'Aggressive (LAG)',
+    shortName: 'Aggressive',
+    tagline: 'Loose-Aggressive · High pressure, frequent raises & bluffs',
+    description:
+      'Enters many pots with raises, applies multi-street pressure via c-bets and semi-bluffs, and frequently 3-bets.',
+    params: {
+      preflopLooseness: 48,
+      preflopAggression: 86,
+      foldToPressure: 36,
+      drawDefense: 72,
+      postflopAggression: 84,
+      bluffFreq: 34,
+      betSizePct: 75,
+    },
+  },
+  nit: {
+    id: 'nit',
+    name: 'Nit',
+    shortName: 'Nit',
+    tagline: 'Ultra-Tight · Waits for premiums, folds draws & pairs under fire',
+    description:
+      'Plays only top-tier hands, folds marginal pairs and draws quickly when facing bets or raises, and rarely bluffs.',
+    params: {
+      preflopLooseness: 14,
+      preflopAggression: 48,
+      foldToPressure: 84,
+      drawDefense: 8,
+      postflopAggression: 28,
+      bluffFreq: 3,
+      betSizePct: 55,
+    },
+  },
+  tag: {
+    id: 'tag',
+    name: 'TAG (Tight-Aggressive)',
+    shortName: 'TAG',
+    tagline: 'Tight-Aggressive · Selective range, disciplined aggression',
+    description:
+      'Chooses solid starting hands, bets/raises strong value hands and selective draws, and folds to heavy multi-way pressure.',
+    params: {
+      preflopLooseness: 26,
+      preflopAggression: 74,
+      foldToPressure: 56,
+      drawDefense: 45,
+      postflopAggression: 62,
+      bluffFreq: 14,
+      betSizePct: 65,
+    },
+  },
+  maniac: {
+    id: 'maniac',
+    name: 'Maniac',
+    shortName: 'Maniac',
+    tagline: 'Hyper-Aggressive · Constant bets, raises & bluffs',
+    description:
+      'Plays a huge range at maximum aggression—constantly raising, re-raising, and firing multi-street bluffs.',
+    params: {
+      preflopLooseness: 84,
+      preflopAggression: 96,
+      foldToPressure: 20,
+      drawDefense: 88,
+      postflopAggression: 96,
+      bluffFreq: 54,
+      betSizePct: 100,
+    },
+  },
+  showdown: {
+    id: 'showdown',
+    name: 'Showdown (Baseline)',
+    shortName: 'Showdown',
+    tagline: 'Passive Baseline · Never folds, never raises',
+    description:
+      'Always checks or calls to showdown. Useful for measuring how pure card equity performs against active archetypes.',
+    params: null,
+  },
+};
+const ARCHETYPE_LIST = Object.values(ARCHETYPES);
+function getDefaultArchetypeParams() {
+  const out = {};
+  for (const arch of ARCHETYPE_LIST) {
+    if (arch.params) {
+      out[arch.id] = { ...arch.params };
+    }
+  }
+  return out;
+}
+function getArchetype(id, overrides = null) {
+  const key = String(id || 'tag').toLowerCase().trim().replace(/[\s-]+/g, '_');
+  let base = ARCHETYPES[key];
+  if (!base) {
+    if (key === 'lag' || key === 'agg' || key === 'aggro') base = ARCHETYPES.aggressive;
+    else if (key === 'station' || key === 'fish' || key === 'passive') base = ARCHETYPES.calling_station;
+    else if (key === 'tight' || key === 'rock') base = ARCHETYPES.nit;
+    else if (key === 'baseline' || key === 'passive_baseline') base = ARCHETYPES.showdown;
+  }
+  if (!base) {
+    throw new Error(`Unknown player archetype: "${id}"`);
+  }
+  if (!base.params || !overrides || !overrides[base.id]) {
+    return base;
+  }
+  const merged = { ...base.params };
+  const custom = overrides[base.id];
+  for (const def of ARCHETYPE_PARAM_DEFS) {
+    if (custom[def.key] !== undefined && custom[def.key] !== null && !Number.isNaN(Number(custom[def.key]))) {
+      merged[def.key] = Math.max(def.min, Math.min(def.max, Number(custom[def.key])));
+    }
+  }
+  return { ...base, params: merged };
+}
+
+/**
+ * Computes a betting action for a player on the current street using their
+ * configurable archetype parameters.
+ */
+function decideAction(ctx, rng) {
+  const {
+    archetype,
+    hole0,
+    hole1,
+    board,
+    boardLen,
+    street, // 0=preflop, 1=flop, 2=turn, 3=river
+    pot,
+    currentBet,
+    playerStreetBet,
+    playerStack,
+    bb,
+    raisesThisStreet,
+    maxRaisesPerStreet,
+    isInPosition,
+    activeCount,
+    wasAggressor,
+  } = ctx;
+
+  const toCall = Math.max(0, currentBet - playerStreetBet);
+  const canRaise = raisesThisStreet < maxRaisesPerStreet && playerStack > toCall;
+
+  // Baseline showdown bot: always checks or calls
+  if (!archetype.params) {
+    if (toCall === 0) return { type: 'check', amount: 0 };
+    return { type: 'call', amount: Math.min(toCall, playerStack) };
+  }
+
+  const cfg = archetype.params;
+  const looseness = cfg.preflopLooseness / 100;
+  const preAgg = cfg.preflopAggression / 100;
+  const foldPress = cfg.foldToPressure / 100;
+  const drawDef = cfg.drawDefense / 100;
+  const postAgg = cfg.postflopAggression / 100;
+  const bluff = cfg.bluffFreq / 100;
+  const betSizePotFrac = cfg.betSizePct / 100;
+
+  const potOdds = toCall > 0 ? toCall / (pot + toCall) : 0;
+  const noise = (rng() - 0.5) * 0.07;
+  const posBonus = isInPosition ? 0.04 : -0.02;
+  const multiwayPenalty = Math.max(0, activeCount - 2) * (0.015 + foldPress * 0.025);
+
+  if (street === 0) {
+    // --- PREFLOP ---
+    const preflopPlay = Math.max(0.08, Math.min(0.84, 0.78 - looseness * 0.72));
+    const preflopRaise = preflopPlay + (1 - preAgg) * (0.90 - preflopPlay) * 0.75;
+    const preflop3Bet = Math.max(
+      preflopRaise + 0.06,
+      Math.min(0.96, 0.96 - preAgg * 0.38 - (preAgg > 0.2 ? looseness * 0.14 : 0))
+    );
+    const potOddsFactor = 0.35 + foldPress * 0.90;
+
+    const rawStr = evaluatePreflopStrength(hole0, hole1);
+    const effStr = rawStr + posBonus + noise - multiwayPenalty;
+
+    if (toCall === 0) {
+      if (canRaise && effStr >= preflopRaise) {
+        const raiseTo = choosePreflopRaiseSize(currentBet, bb, raisesThisStreet, betSizePotFrac, playerStreetBet, playerStack);
+        return { type: 'raise', amount: raiseTo };
+      }
+      return { type: 'check', amount: 0 };
+    }
+
+    const isUnopened = currentBet <= bb;
+    const facing3Bet = raisesThisStreet >= 2;
+    const betInBB = toCall / bb;
+
+    if (isUnopened) {
+      if (canRaise && effStr >= preflopRaise) {
+        const raiseTo = choosePreflopRaiseSize(currentBet, bb, raisesThisStreet, betSizePotFrac, playerStreetBet, playerStack);
+        return { type: 'raise', amount: raiseTo };
+      }
+      if (effStr >= preflopPlay) {
+        if (canRaise && preAgg >= 0.65 && rng() < preAgg * 0.7) {
+          const raiseTo = choosePreflopRaiseSize(currentBet, bb, raisesThisStreet, betSizePotFrac, playerStreetBet, playerStack);
+          return { type: 'raise', amount: raiseTo };
+        }
+        return { type: 'call', amount: Math.min(toCall, playerStack) };
+      }
+      if (potOdds < 0.22 && effStr >= preflopPlay - 0.10 * (1 - foldPress)) {
+        return { type: 'call', amount: Math.min(toCall, playerStack) };
+      }
+      return { type: 'fold', amount: 0 };
+    }
+
+    // Facing a preflop raise or 3-bet+
+    if (canRaise && effStr >= preflop3Bet + (facing3Bet ? 0.09 : 0)) {
+      const raiseTo = choosePreflopRaiseSize(currentBet, bb, raisesThisStreet, betSizePotFrac, playerStreetBet, playerStack);
+      return { type: 'raise', amount: raiseTo };
+    }
+    if (canRaise && !facing3Bet && effStr >= preflopPlay && rng() < bluff * 0.45 * preAgg) {
+      const raiseTo = choosePreflopRaiseSize(currentBet, bb, raisesThisStreet, betSizePotFrac, playerStreetBet, playerStack);
+      return { type: 'raise', amount: raiseTo };
+    }
+
+    const sizePressure = Math.min(0.28, Math.max(0, (betInBB - 2.5) * 0.016)) * potOddsFactor;
+    const callThreshold =
+      0.10 +
+      foldPress * 0.56 +
+      (facing3Bet ? 0.10 + foldPress * 0.10 : 0) +
+      sizePressure +
+      potOdds * 0.28 * potOddsFactor;
+
+    if (effStr >= callThreshold || (potOdds < 0.15 && effStr >= preflopPlay - 0.05)) {
+      return { type: 'call', amount: Math.min(toCall, playerStack) };
+    }
+    return { type: 'fold', amount: 0 };
+  }
+
+  // --- POSTFLOP (Flop / Turn / River) ---
+  const evalRes = evaluatePostflopStrength(hole0, hole1, board, boardLen);
+  const isRiver = street === 3;
+  const facingRaise = raisesThisStreet >= 2;
+
+  // Draw value is weighted by this player's drawDefense setting (Nits discount draws under fire!)
+  const drawWeight = (0.05 + 0.95 * drawDef) * (facingRaise ? 0.42 : 1.0);
+  const effectiveDraw = evalRes.drawBoost * drawWeight * (1 - evalRes.madeStrength * 0.45);
+  const effStr = Math.min(0.99, evalRes.madeStrength + effectiveDraw) + posBonus + noise - multiwayPenalty;
+
+  const postflopBet = 0.80 - postAgg * 0.48;
+  const postflopRaise = 0.92 - postAgg * 0.38;
+  const semiBluffFreq = Math.min(0.90, postAgg * 0.42 + bluff * 1.15) * (0.20 + 0.80 * drawDef);
+
+  if (toCall === 0) {
+    // Checked to us: Check vs Bet
+    const cbetBoost = wasAggressor ? 0.03 + postAgg * 0.07 : 0;
+    if (canRaise && effStr + cbetBoost >= postflopBet) {
+      const betTo = choosePostflopBetSize(pot, bb, betSizePotFrac, playerStreetBet, playerStack, effStr > 0.80);
+      return { type: 'bet', amount: betTo };
+    }
+    // Semi-bluff bet with a strong draw
+    if (canRaise && !isRiver && evalRes.hasStrongDraw && rng() < semiBluffFreq) {
+      const betTo = choosePostflopBetSize(pot, bb, betSizePotFrac, playerStreetBet, playerStack, false);
+      return { type: 'bet', amount: betTo };
+    }
+    // Pure bluff / stab
+    const bluffProb = bluff * (isInPosition ? 1.15 : 0.72) * (wasAggressor ? 1.2 : 0.85) * (activeCount <= 2 ? 1.0 : 0.55);
+    if (canRaise && activeCount <= 3 && rng() < bluffProb) {
+      const betTo = choosePostflopBetSize(pot, bb, betSizePotFrac, playerStreetBet, playerStack, false);
+      return { type: 'bet', amount: betTo };
+    }
+    return { type: 'check', amount: 0 };
+  }
+
+  // Facing a postflop bet or raise
+  // Value raise
+  if (canRaise && effStr >= postflopRaise + (facingRaise ? 0.08 + foldPress * 0.06 : 0)) {
+    const raiseTo = choosePostflopRaiseSize(pot, currentBet, bb, betSizePotFrac, playerStreetBet, playerStack);
+    return { type: 'raise', amount: raiseTo };
+  }
+  // Semi-bluff raise with strong draw (only aggressive/TAG types with draw appetite)
+  if (canRaise && !isRiver && !facingRaise && evalRes.hasStrongDraw && rng() < semiBluffFreq * 0.55) {
+    const raiseTo = choosePostflopRaiseSize(pot, currentBet, bb, betSizePotFrac, playerStreetBet, playerStack);
+    return { type: 'raise', amount: raiseTo };
+  }
+  // Pure bluff raise
+  if (canRaise && !facingRaise && activeCount === 2 && rng() < bluff * 0.25 * postAgg) {
+    const raiseTo = choosePostflopRaiseSize(pot, currentBet, bb, betSizePotFrac, playerStreetBet, playerStack);
+    return { type: 'raise', amount: raiseTo };
+  }
+
+  // Call vs Fold: governed directly by foldToPressure, pot odds, facingRaise, and drawDefense
+  const baseCallFloor = 0.12 + foldPress * 0.50;
+  const raisePenalty = facingRaise ? 0.06 + foldPress * 0.22 : 0;
+  const potOddsFactor = 0.35 + foldPress * 0.95;
+
+  const callThreshold = Math.max(
+    baseCallFloor + raisePenalty,
+    potOdds * potOddsFactor + (baseCallFloor - 0.18) * 0.70 + raisePenalty
+  );
+
+  // Explicit archetype-driven draw defense (Nits fold draws facing pressure/raises; Stations call)
+  let defendedDraw = false;
+  if (!isRiver && (evalRes.hasStrongDraw || (evalRes.hasWeakDraw && drawDef >= 0.65))) {
+    const maxOdds = 0.20 + drawDef * 0.32 - (facingRaise ? 0.10 : 0);
+    const drawCallProb =
+      potOdds <= maxOdds
+        ? drawDef * (facingRaise ? 0.25 : 1.0)
+        : drawDef * (facingRaise ? 0.04 : 0.22);
+    if (rng() < drawCallProb) {
+      defendedDraw = true;
+    }
+  }
+
+  if (effStr >= callThreshold || defendedDraw || (toCall <= bb && effStr >= baseCallFloor * 0.72)) {
+    return { type: 'call', amount: Math.min(toCall, playerStack) };
+  }
+  return { type: 'fold', amount: 0 };
+}
+
+function choosePreflopRaiseSize(currentBet, bb, raisesThisStreet, betSizePotFrac, playerStreetBet, playerStack) {
+  const maxTotal = playerStreetBet + playerStack;
+  let target;
+  if (raisesThisStreet === 0) {
+    const mult = betSizePotFrac >= 0.80 ? 3.5 : betSizePotFrac >= 0.62 ? 3.0 : 2.5;
+    target = Math.round(bb * mult);
+  } else {
+    target = Math.round(currentBet * 3);
+  }
+  target = Math.max(currentBet + bb, target);
+  if (target - playerStreetBet >= playerStack * 0.65) {
+    return maxTotal;
+  }
+  return Math.min(maxTotal, target);
+}
+
+function choosePostflopBetSize(pot, bb, betSizePotFrac, playerStreetBet, playerStack, isMonster) {
+  const maxTotal = playerStreetBet + playerStack;
+  const frac = isMonster ? Math.min(1.5, betSizePotFrac + 0.12) : betSizePotFrac;
+  const betSize = Math.max(bb, Math.round(pot * frac));
+  const target = playerStreetBet + betSize;
+  if (target - playerStreetBet >= playerStack * 0.65) {
+    return maxTotal;
+  }
+  return Math.min(maxTotal, target);
+}
+
+function choosePostflopRaiseSize(pot, currentBet, bb, betSizePotFrac, playerStreetBet, playerStack) {
+  const maxTotal = playerStreetBet + playerStack;
+  const minRaise = Math.max(bb, currentBet - playerStreetBet);
+  const potRaise = Math.round(currentBet * 2.5 + pot * 0.25 * betSizePotFrac);
+  const target = Math.max(currentBet + minRaise, potRaise);
+  if (target - playerStreetBet >= playerStack * 0.65) {
+    return maxTotal;
+  }
+  return Math.min(maxTotal, target);
+}
+
+// === src/engine.js ===
+const STREET_NAMES = ['Preflop', 'Flop', 'Turn', 'River'];
+
+const _showdownBuf = new Int8Array(7);
+
+/**
+ * Plays a single No-Limit Texas Hold'em hand with full betting rounds,
+ * player archetype decisions, and exact main/side-pot resolution.
+ */
+function playHand(params, rng) {
+  const {
+    holes,           // Array<[c0, c1]> of length N
+    board,           // Array<number> of length 5
+    archetypes,      // Array<Archetype> of length N
+    names,           // Array<string> of length N
+    positions,       // Array<string> of length N
+    stacks,          // Array<number> initial stacks (integer chips)
+    sb,              // Small blind (integer chips)
+    bb,              // Big blind (integer chips)
+    buttonIndex = 0, // Dealer button seat index
+    startStreet = 0, // 0=Preflop, 1=Flop, 2=Turn, 3=River
+    startingPot = 0, // Total pot already in middle when startStreet > 0
+    maxRaisesPerStreet = 4,
+    recordHistory = false,
+  } = params;
+
+  const n = holes.length;
+  const curStacks = stacks.slice();
+  const totalBet = new Float64Array(n);
+  const folded = new Uint8Array(n);
+  const allIn = new Uint8Array(n);
+  const vpip = new Uint8Array(n);
+  const pfr = new Uint8Array(n);
+  const aggActions = new Uint16Array(n);
+  const passActions = new Uint16Array(n);
+
+  const history = recordHistory
+    ? {
+        holes: holes.map((h) => [cardToPretty(h[0]), cardToPretty(h[1])]),
+        board: board.map(cardToPretty),
+        startStreet,
+        events: [],
+        winners: [],
+        pot: 0,
+        endedStreet: '',
+      }
+    : null;
+
+  const logEvent = (msg) => {
+    if (history) history.events.push(msg);
+  };
+
+  let pot = 0;
+  let activeCount = n;
+  let lastAggressor = -1;
+
+  const postChips = (seat, amount) => {
+    const actual = Math.min(amount, curStacks[seat]);
+    curStacks[seat] -= actual;
+    totalBet[seat] += actual;
+    pot += actual;
+    if (curStacks[seat] === 0) allIn[seat] = 1;
+    return actual;
+  };
+
+  const btn = ((buttonIndex % n) + n) % n;
+  const sbSeat = n === 2 ? btn : (btn + 1) % n;
+  const bbSeat = n === 2 ? (btn + 1) % n : (btn + 2) % n;
+
+  // Initial blinds or starting pot for postflop starts
+  let preflopCurrentBet = 0;
+  const preflopStreetBet = new Float64Array(n);
+
+  if (startStreet === 0) {
+    const sbPosted = postChips(sbSeat, sb);
+    const bbPosted = postChips(bbSeat, bb);
+    preflopStreetBet[sbSeat] = sbPosted;
+    preflopStreetBet[bbSeat] = bbPosted;
+    preflopCurrentBet = Math.max(sbPosted, bbPosted);
+    if (history) {
+      logEvent(
+        `Preflop · ${names[sbSeat]} (${positions[sbSeat]}) posts SB ${fmtBB(sbPosted, bb)}, ${names[bbSeat]} (${positions[bbSeat]}) posts BB ${fmtBB(bbPosted, bb)}`
+      );
+    }
+  } else {
+    const perPlayer = Math.max(bb, Math.round((startingPot || n * 3 * bb) / n));
+    for (let i = 0; i < n; i++) {
+      postChips(i, perPlayer);
+    }
+    if (history) {
+      const shownBoard = board.slice(0, startStreet === 1 ? 3 : startStreet === 2 ? 4 : 5).map(cardToPretty).join(' ');
+      logEvent(
+        `Starting on ${STREET_NAMES[startStreet]} [${shownBoard}] · Pot ${fmtBB(pot, bb)} (${fmtBB(perPlayer, bb)} each)`
+      );
+    }
+  }
+
+  let endedStreet = startStreet;
+  let reachedShowdown = false;
+
+  for (let street = startStreet; street <= 3; street++) {
+    if (activeCount <= 1) break;
+    endedStreet = street;
+
+    const boardLen = street === 0 ? 0 : street === 1 ? 3 : street === 2 ? 4 : 5;
+    if (history && street > startStreet) {
+      const dealt = board.slice(0, boardLen).map(cardToPretty).join(' ');
+      logEvent(`— ${STREET_NAMES[street]} [${dealt}] (Pot: ${fmtBB(pot, bb)}) —`);
+    }
+
+    // Count players able to act (not folded and have chips left)
+    let canActCount = 0;
+    for (let i = 0; i < n; i++) {
+      if (!folded[i] && curStacks[i] > 0) canActCount++;
+    }
+    if (canActCount <= 1) continue;
+
+    const streetBet = street === 0 && startStreet === 0 ? preflopStreetBet : new Float64Array(n);
+    let currentBet = street === 0 && startStreet === 0 ? preflopCurrentBet : 0;
+    let raisesThisStreet = 0;
+    const needsToAct = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      if (!folded[i] && curStacks[i] > 0) needsToAct[i] = 1;
+    }
+
+    // Determine first seat to act on this street
+    let actor;
+    if (street === 0) {
+      actor = n === 2 ? sbSeat : (btn + 3) % n;
+    } else {
+      actor = (btn + 1) % n;
+    }
+
+    // Count remaining actors ahead to approximate position (in-position if acting in back half)
+    let safety = 0;
+    while (safety++ < n * 10) {
+      // Find next seat that needs to act
+      let found = -1;
+      for (let step = 0; step < n; step++) {
+        const s = (actor + step) % n;
+        if (needsToAct[s] && !folded[s] && curStacks[s] > 0) {
+          found = s;
+          break;
+        }
+      }
+      if (found === -1 || activeCount <= 1) break;
+      actor = found;
+
+      // Determine if player is roughly in position (acts near or on button)
+      const distFromFirst = (actor - (btn + 1) + n) % n;
+      const isInPosition = distFromFirst >= Math.floor(n / 2);
+
+      const action = decideAction(
+        {
+          archetype: archetypes[actor],
+          hole0: holes[actor][0],
+          hole1: holes[actor][1],
+          board,
+          boardLen,
+          street,
+          pot,
+          currentBet,
+          playerStreetBet: streetBet[actor],
+          playerStack: curStacks[actor],
+          bb,
+          raisesThisStreet,
+          maxRaisesPerStreet,
+          isInPosition,
+          activeCount,
+          wasAggressor: lastAggressor === actor,
+        },
+        rng
+      );
+
+      const toCall = Math.max(0, currentBet - streetBet[actor]);
+
+      if (action.type === 'fold' && toCall > 0) {
+        folded[actor] = 1;
+        needsToAct[actor] = 0;
+        activeCount--;
+        logEvent(`  ${names[actor]} (${archetypes[actor].shortName}) folds`);
+      } else if (action.type === 'check' || (action.type === 'fold' && toCall === 0)) {
+        needsToAct[actor] = 0;
+        passActions[actor]++;
+        logEvent(`  ${names[actor]} (${archetypes[actor].shortName}) checks`);
+      } else if (action.type === 'call') {
+        const paid = postChips(actor, toCall);
+        streetBet[actor] += paid;
+        needsToAct[actor] = 0;
+        vpip[actor] = 1;
+        passActions[actor]++;
+        const allInTag = curStacks[actor] === 0 ? ' (all-in)' : '';
+        logEvent(
+          `  ${names[actor]} (${archetypes[actor].shortName}) calls ${fmtBB(paid, bb)}${allInTag}`
+        );
+      } else {
+        // bet or raise
+        const desiredTotal = Math.max(currentBet + bb, action.amount);
+        const deltaNeeded = Math.max(toCall, desiredTotal - streetBet[actor]);
+        const paid = postChips(actor, deltaNeeded);
+        streetBet[actor] += paid;
+        vpip[actor] = 1;
+
+        if (streetBet[actor] > currentBet) {
+          const verb = currentBet === 0 ? 'bets' : 'raises to';
+          currentBet = streetBet[actor];
+          raisesThisStreet++;
+          lastAggressor = actor;
+          aggActions[actor]++;
+          if (street === 0) pfr[actor] = 1;
+
+          // Everyone else who is active and not all-in must respond
+          for (let j = 0; j < n; j++) {
+            needsToAct[j] = j !== actor && !folded[j] && curStacks[j] > 0 ? 1 : 0;
+          }
+          const allInTag = curStacks[actor] === 0 ? ' (all-in)' : '';
+          logEvent(
+            `  ${names[actor]} (${archetypes[actor].shortName}) ${verb} ${fmtBB(currentBet, bb)}${allInTag}`
+          );
+        } else {
+          // Short all-in that didn't exceed currentBet -> treated as call
+          needsToAct[actor] = 0;
+          passActions[actor]++;
+          logEvent(
+            `  ${names[actor]} (${archetypes[actor].shortName}) calls ${fmtBB(paid, bb)} (all-in)`
+          );
+        }
+      }
+
+      actor = (actor + 1) % n;
+    }
+  }
+
+  // --- POT RESOLUTION ---
+  const payouts = new Float64Array(n);
+  const scores = new Int32Array(n);
+  let winningCategory = -1;
+
+  if (activeCount === 1) {
+    // Win by fold
+    let soleWinner = -1;
+    for (let i = 0; i < n; i++) {
+      if (!folded[i]) {
+        soleWinner = i;
+        break;
+      }
+    }
+    payouts[soleWinner] = pot;
+    curStacks[soleWinner] += pot;
+    if (history) {
+      history.endedStreet = STREET_NAMES[endedStreet];
+      history.pot = pot;
+      history.winners.push({
+        seat: soleWinner,
+        name: names[soleWinner],
+        amount: pot,
+        hand: 'Uncontested (everyone folded)',
+      });
+      logEvent(
+        `Result: ${names[soleWinner]} wins ${fmtBB(pot, bb)} uncontested on ${STREET_NAMES[endedStreet]}`
+      );
+    }
+  } else {
+    // Showdown with exact side-pot calculation
+    reachedShowdown = true;
+    for (let i = 0; i < n; i++) {
+      if (!folded[i]) {
+        _showdownBuf[0] = holes[i][0];
+        _showdownBuf[1] = holes[i][1];
+        for (let b = 0; b < 5; b++) _showdownBuf[2 + b] = board[b];
+        scores[i] = evaluateHand(_showdownBuf, 7);
+      }
+    }
+
+    // Collect sorted unique positive contribution levels of non-folded players
+    const levelSet = new Set();
+    for (let i = 0; i < n; i++) {
+      if (!folded[i] && totalBet[i] > 0) levelSet.add(totalBet[i]);
+    }
+    const levels = Array.from(levelSet).sort((a, b) => a - b);
+
+    // Order for odd-chip remainder distribution: clockwise starting left of button
+    const oddChipOrder = [];
+    for (let step = 1; step <= n; step++) {
+      oddChipOrder.push((btn + step) % n);
+    }
+
+    let prevLevel = 0;
+    let allocated = 0;
+    let mainPotTopScore = -1;
+
+    for (let li = 0; li < levels.length; li++) {
+      const level = levels[li];
+      let tierPot = 0;
+      for (let j = 0; j < n; j++) {
+        const contrib = Math.max(0, Math.min(totalBet[j], level) - prevLevel);
+        tierPot += contrib;
+      }
+      if (tierPot <= 0) {
+        prevLevel = level;
+        continue;
+      }
+
+      let bestScore = -1;
+      for (let i = 0; i < n; i++) {
+        if (!folded[i] && totalBet[i] >= level && scores[i] > bestScore) {
+          bestScore = scores[i];
+        }
+      }
+      if (li === 0) mainPotTopScore = bestScore;
+
+      const winners = [];
+      for (const seatIdx of oddChipOrder) {
+        if (!folded[seatIdx] && totalBet[seatIdx] >= level && scores[seatIdx] === bestScore) {
+          winners.push(seatIdx);
+        }
+      }
+
+      const share = Math.floor(tierPot / winners.length);
+      let rem = tierPot - share * winners.length;
+      for (const w of winners) {
+        const extra = rem > 0 ? 1 : 0;
+        if (rem > 0) rem--;
+        payouts[w] += share + extra;
+        curStacks[w] += share + extra;
+      }
+      allocated += tierPot;
+      prevLevel = level;
+    }
+
+    // Edge guard: if any folded player somehow contributed above max active level
+    if (allocated < pot) {
+      const leftover = pot - allocated;
+      let bestSeat = -1;
+      let bestScore = -1;
+      for (let i = 0; i < n; i++) {
+        if (!folded[i] && scores[i] > bestScore) {
+          bestScore = scores[i];
+          bestSeat = i;
+        }
+      }
+      if (bestSeat !== -1) {
+        payouts[bestSeat] += leftover;
+        curStacks[bestSeat] += leftover;
+      }
+    }
+
+    winningCategory = mainPotTopScore >= 0 ? scoreCategory(mainPotTopScore) : -1;
+
+    if (history) {
+      history.endedStreet = 'Showdown';
+      history.pot = pot;
+      logEvent(`— Showdown [${board.map(cardToPretty).join(' ')}] —`);
+      for (let i = 0; i < n; i++) {
+        if (!folded[i]) {
+          const wonStr = payouts[i] > 0 ? ` → WINS ${fmtBB(payouts[i], bb)}` : '';
+          logEvent(
+            `  ${names[i]} shows ${cardToPretty(holes[i][0])}${cardToPretty(holes[i][1])} (${describeHandScore(scores[i])})${wonStr}`
+          );
+        }
+      }
+      for (let i = 0; i < n; i++) {
+        if (payouts[i] > 0) {
+          history.winners.push({
+            seat: i,
+            name: names[i],
+            amount: payouts[i],
+            hand: describeHandScore(scores[i]),
+          });
+        }
+      }
+    }
+  }
+
+  const netChips = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    netChips[i] = curStacks[i] - stacks[i];
+  }
+
+  return {
+    pot,
+    payouts,
+    netChips,
+    finalStacks: curStacks,
+    folded,
+    vpip,
+    pfr,
+    aggActions,
+    passActions,
+    reachedShowdown,
+    endedStreet,
+    winningCategory,
+    history,
+  };
+}
+
+function fmtBB(chips, bb) {
+  const val = chips / bb;
+  return Number.isInteger(val) ? `${val} BB` : `${val.toFixed(1)} BB`;
+}
+
+// === src/simulator.js ===
+const _rawBuf = new Int8Array(7);
+
+/**
+ * Normalizes and validates a simulation scenario configuration.
+ */
+function normalizeConfig(raw) {
+  if (!raw || !Array.isArray(raw.players)) {
+    throw new Error('Configuration must include a "players" array.');
+  }
+  const n = raw.players.length;
+  if (n < 2 || n > 9) {
+    throw new Error(`Number of players must be between 2 and 9 (got ${n}).`);
+  }
+
+  const trials = Math.max(10, Math.min(200000, Math.round(Number(raw.trials) || 5000)));
+  const sb = Math.max(1, Math.round(Number(raw.sb) || 1));
+  const bb = Math.max(sb, Math.round(Number(raw.bb) || 2));
+  const defaultStackBB = Math.max(5, Number(raw.stackBB) || 100);
+  const buttonIndex = Number.isInteger(raw.buttonIndex) ? raw.buttonIndex : 0;
+  const positions = getPositionNames(n);
+
+  const playerHoleCards = [];
+  const archetypes = [];
+  const names = [];
+  const stacks = [];
+
+  const archetypeOverrides = raw.archetypeOverrides || null;
+
+  for (let i = 0; i < n; i++) {
+    const p = raw.players[i] || {};
+    const parsedHole = parseCardList(p.cards ?? p.holeCards ?? [null, null], 2);
+    playerHoleCards.push(parsedHole);
+    archetypes.push(getArchetype(p.type ?? p.archetype ?? 'tag', archetypeOverrides));
+    names.push(String(p.name || `Seat ${i + 1}`));
+    const seatStackBB = p.stackBB !== undefined && p.stackBB !== null ? Number(p.stackBB) : defaultStackBB;
+    stacks.push(Math.max(bb * 2, Math.round(seatStackBB * bb)));
+  }
+
+  const boardParsed = parseCardList(raw.board ?? raw.communityCards ?? [], 5);
+  const specifiedBoardCount = boardParsed.filter((c) => c !== null).length;
+
+  // Compact specified board cards to front if user left gaps (e.g. only filled Turn slot)
+  const boardSlots = boardParsed.slice(0, 5);
+  const remainingDeck = buildRemainingDeck(playerHoleCards, boardSlots);
+
+  // Determine starting street
+  const startMode = raw.startMode === 'preflop' ? 'preflop' : 'street';
+  let startStreet = 0;
+  if (startMode === 'street') {
+    if (specifiedBoardCount >= 5) startStreet = 3; // River
+    else if (specifiedBoardCount === 4) startStreet = 2; // Turn
+    else if (specifiedBoardCount >= 1) startStreet = 1; // Flop (1-3 cards known)
+    else startStreet = 0; // Preflop
+  }
+
+  const startingPotBB =
+    raw.startingPotBB !== undefined && raw.startingPotBB !== null && raw.startingPotBB !== ''
+      ? Math.max(2, Number(raw.startingPotBB))
+      : n * 3;
+  const startingPot = Math.round(startingPotBB * bb);
+
+  return {
+    trials,
+    sb,
+    bb,
+    stackBB: defaultStackBB,
+    buttonIndex,
+    positions,
+    playerHoleCards,
+    archetypes,
+    names,
+    stacks,
+    boardSlots,
+    specifiedBoardCount,
+    remainingDeck,
+    startMode,
+    startStreet,
+    startingPot,
+    startingPotBB,
+    seed: raw.seed ?? null,
+    sampleCount: Math.max(0, Math.min(10, Number(raw.sampleCount ?? 5))),
+  };
+}
+
+/**
+ * Creates mutable accumulator state for incremental or synchronous Monte Carlo execution.
+ */
+function createSimulationState(cfg) {
+  const n = cfg.playerHoleCards.length;
+  let randomCardsNeeded = 0;
+  for (let i = 0; i < n; i++) {
+    if (cfg.playerHoleCards[i][0] === null) randomCardsNeeded++;
+    if (cfg.playerHoleCards[i][1] === null) randomCardsNeeded++;
+  }
+  for (let b = 0; b < 5; b++) {
+    if (cfg.boardSlots[b] === null) randomCardsNeeded++;
+  }
+
+  return {
+    cfg,
+    n,
+    rng: createRng(cfg.seed),
+    deckBuf: new Int8Array(cfg.remainingDeck),
+    randomCardsNeeded,
+    holesBuf: Array.from({ length: n }, () => [0, 0]),
+    boardBuf: [0, 0, 0, 0, 0],
+    rawScores: new Int32Array(n),
+
+    // Per-player accumulators
+    rawEquitySum: new Float64Array(n),
+    rawWinCount: new Uint32Array(n),
+    rawTieCount: new Uint32Array(n),
+    actualWinCount: new Uint32Array(n),
+    actualTieCount: new Uint32Array(n),
+    actualEquitySum: new Float64Array(n),
+    foldCount: new Uint32Array(n),
+    wtsdCount: new Uint32Array(n),
+    vpipCount: new Uint32Array(n),
+    pfrCount: new Uint32Array(n),
+    aggActionSum: new Uint32Array(n),
+    passActionSum: new Uint32Array(n),
+    netBBSum: new Float64Array(n),
+    netBBSqSum: new Float64Array(n),
+    potsWonBBSum: new Float64Array(n),
+    potsWonCount: new Uint32Array(n),
+
+    // Table accumulators
+    totalPotBBSum: 0,
+    showdownCount: 0,
+    streetEndCounts: { preflop: 0, flop: 0, turn: 0, river: 0, showdown: 0 },
+    winningHandRanks: new Uint32Array(HAND_CATEGORIES.length),
+    sampleHands: [],
+    completed: 0,
+    startTime: Date.now(),
+  };
+}
+
+function runBatch(state, count) {
+  const {
+    cfg,
+    n,
+    rng,
+    deckBuf,
+    randomCardsNeeded,
+    holesBuf,
+    boardBuf,
+    rawScores,
+  } = state;
+
+  const end = Math.min(cfg.trials, state.completed + count);
+
+  for (let t = state.completed; t < end; t++) {
+    if (randomCardsNeeded > 0) {
+      drawRandomCards(deckBuf, randomCardsNeeded, rng);
+    }
+
+    let drawIdx = 0;
+    for (let i = 0; i < n; i++) {
+      const h0 = cfg.playerHoleCards[i][0];
+      const h1 = cfg.playerHoleCards[i][1];
+      holesBuf[i][0] = h0 !== null ? h0 : deckBuf[drawIdx++];
+      holesBuf[i][1] = h1 !== null ? h1 : deckBuf[drawIdx++];
+    }
+    for (let b = 0; b < 5; b++) {
+      const bc = cfg.boardSlots[b];
+      boardBuf[b] = bc !== null ? bc : deckBuf[drawIdx++];
+    }
+
+    // 1. Compute Raw Showdown Equity on this exact deal (nobody folds)
+    let bestRaw = -1;
+    let rawWinnerCount = 0;
+    for (let i = 0; i < n; i++) {
+      _rawBuf[0] = holesBuf[i][0];
+      _rawBuf[1] = holesBuf[i][1];
+      _rawBuf[2] = boardBuf[0];
+      _rawBuf[3] = boardBuf[1];
+      _rawBuf[4] = boardBuf[2];
+      _rawBuf[5] = boardBuf[3];
+      _rawBuf[6] = boardBuf[4];
+      const sc = evaluateHand(_rawBuf, 7);
+      rawScores[i] = sc;
+      if (sc > bestRaw) {
+        bestRaw = sc;
+        rawWinnerCount = 1;
+      } else if (sc === bestRaw) {
+        rawWinnerCount++;
+      }
+    }
+    const rawShare = 1 / rawWinnerCount;
+    for (let i = 0; i < n; i++) {
+      if (rawScores[i] === bestRaw) {
+        state.rawEquitySum[i] += rawShare;
+        if (rawWinnerCount === 1) state.rawWinCount[i]++;
+        else state.rawTieCount[i]++;
+      }
+    }
+
+    // 2. Play out the hand with archetype betting decisions
+    const recordHistory = state.sampleHands.length < cfg.sampleCount;
+    const res = playHand(
+      {
+        holes: holesBuf,
+        board: boardBuf,
+        archetypes: cfg.archetypes,
+        names: cfg.names,
+        positions: cfg.positions,
+        stacks: cfg.stacks,
+        sb: cfg.sb,
+        bb: cfg.bb,
+        buttonIndex: cfg.buttonIndex,
+        startStreet: cfg.startStreet,
+        startingPot: cfg.startingPot,
+        recordHistory,
+      },
+      rng
+    );
+
+    if (recordHistory && res.history) {
+      state.sampleHands.push(res.history);
+    }
+
+    state.totalPotBBSum += res.pot / cfg.bb;
+
+    if (res.reachedShowdown) {
+      state.showdownCount++;
+      state.streetEndCounts.showdown++;
+      if (res.winningCategory >= 0) {
+        state.winningHandRanks[res.winningCategory]++;
+      }
+    } else {
+      if (res.endedStreet === 0) state.streetEndCounts.preflop++;
+      else if (res.endedStreet === 1) state.streetEndCounts.flop++;
+      else if (res.endedStreet === 2) state.streetEndCounts.turn++;
+      else state.streetEndCounts.river++;
+    }
+
+    // Determine main-pot / overall winners for Win% & Tie%
+    let winnersCount = 0;
+    for (let i = 0; i < n; i++) {
+      if (res.payouts[i] > 0) winnersCount++;
+    }
+
+    for (let i = 0; i < n; i++) {
+      const netBB = res.netChips[i] / cfg.bb;
+      state.netBBSum[i] += netBB;
+      state.netBBSqSum[i] += netBB * netBB;
+
+      if (res.folded[i]) state.foldCount[i]++;
+      else if (res.reachedShowdown) state.wtsdCount[i]++;
+
+      if (res.vpip[i]) state.vpipCount[i]++;
+      if (res.pfr[i]) state.pfrCount[i]++;
+      state.aggActionSum[i] += res.aggActions[i];
+      state.passActionSum[i] += res.passActions[i];
+
+      if (res.payouts[i] > 0) {
+        const potShare = res.pot > 0 ? res.payouts[i] / res.pot : 0;
+        state.actualEquitySum[i] += potShare;
+        state.potsWonBBSum[i] += res.payouts[i] / cfg.bb;
+        state.potsWonCount[i]++;
+        if (winnersCount === 1) state.actualWinCount[i]++;
+        else state.actualTieCount[i]++;
+      }
+    }
+  }
+
+  state.completed = end;
+}
+
+function finalizeSimulation(state) {
+  const { cfg, n } = state;
+  const T = state.completed || 1;
+  const elapsedMs = Math.max(1, Date.now() - state.startTime);
+
+  const players = [];
+  for (let i = 0; i < n; i++) {
+    const meanEV = state.netBBSum[i] / T;
+    const variance = Math.max(0, state.netBBSqSum[i] / T - meanEV * meanEV);
+    const stdErr = Math.sqrt(variance / T);
+    const ci95 = 1.96 * stdErr;
+
+    const totalActions = state.aggActionSum[i] + state.passActionSum[i];
+    const aggPct = totalActions > 0 ? (state.aggActionSum[i] / totalActions) * 100 : 0;
+
+    players.push({
+      seat: i,
+      name: cfg.names[i],
+      position: cfg.positions[i],
+      cards: cfg.playerHoleCards[i].map((c) => (c !== null ? cardToString(c) : '??')),
+      archetypeId: cfg.archetypes[i].id,
+      archetypeName: cfg.archetypes[i].name,
+      archetypeShort: cfg.archetypes[i].shortName,
+      stackBB: cfg.stacks[i] / cfg.bb,
+      rawEquityPct: (state.rawEquitySum[i] / T) * 100,
+      rawWinPct: (state.rawWinCount[i] / T) * 100,
+      rawTiePct: (state.rawTieCount[i] / T) * 100,
+      actualEquityPct: (state.actualEquitySum[i] / T) * 100,
+      winPct: (state.actualWinCount[i] / T) * 100,
+      tiePct: (state.actualTieCount[i] / T) * 100,
+      foldPct: (state.foldCount[i] / T) * 100,
+      wtsdPct: (state.wtsdCount[i] / T) * 100,
+      vpipPct: (state.vpipCount[i] / T) * 100,
+      pfrPct: (state.pfrCount[i] / T) * 100,
+      aggPct,
+      evBB: meanEV,
+      evCi95BB: ci95,
+      totalNetBB: state.netBBSum[i],
+      avgPotWonBB: state.potsWonCount[i] > 0 ? state.potsWonBBSum[i] / state.potsWonCount[i] : 0,
+    });
+  }
+
+  const showdownTotal = state.showdownCount || 1;
+  const handRankDistribution = HAND_CATEGORIES.map((name, idx) => ({
+    category: idx,
+    name,
+    count: state.winningHandRanks[idx],
+    pct: state.showdownCount > 0 ? (state.winningHandRanks[idx] / showdownTotal) * 100 : 0,
+  }));
+
+  const streetBreakdown = [
+    { key: 'preflop', label: 'Preflop (Fold)', count: state.streetEndCounts.preflop, pct: (state.streetEndCounts.preflop / T) * 100 },
+    { key: 'flop', label: 'Flop (Fold)', count: state.streetEndCounts.flop, pct: (state.streetEndCounts.flop / T) * 100 },
+    { key: 'turn', label: 'Turn (Fold)', count: state.streetEndCounts.turn, pct: (state.streetEndCounts.turn / T) * 100 },
+    { key: 'river', label: 'River (Fold)', count: state.streetEndCounts.river, pct: (state.streetEndCounts.river / T) * 100 },
+    { key: 'showdown', label: 'Showdown', count: state.streetEndCounts.showdown, pct: (state.streetEndCounts.showdown / T) * 100 },
+  ];
+
+  return {
+    trials: T,
+    elapsedMs,
+    sb: cfg.sb,
+    bb: cfg.bb,
+    startStreet: cfg.startStreet,
+    startMode: cfg.startMode,
+    startingPotBB: cfg.startingPotBB,
+    board: cfg.boardSlots.map((c) => (c !== null ? cardToString(c) : null)),
+    avgPotBB: state.totalPotBBSum / T,
+    showdownPct: (state.showdownCount / T) * 100,
+    players,
+    streetBreakdown,
+    handRankDistribution,
+    sampleHands: state.sampleHands,
+  };
+}
+
+/**
+ * Synchronous Monte Carlo simulation (ideal for CLI & unit tests).
+ */
+function runSimulation(rawConfig) {
+  const cfg = normalizeConfig(rawConfig);
+  const state = createSimulationState(cfg);
+  runBatch(state, cfg.trials);
+  return finalizeSimulation(state);
+}
+
+/**
+ * Chunked async Monte Carlo simulation so browsers stay responsive with live progress.
+ */
+function runSimulationAsync(rawConfig, onProgress = null, batchSize = 500) {
+  return new Promise((resolve, reject) => {
+    let cfg;
+    try {
+      cfg = normalizeConfig(rawConfig);
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    const state = createSimulationState(cfg);
+
+    function step() {
+      try {
+        runBatch(state, batchSize);
+        if (onProgress) {
+          onProgress(state.completed, cfg.trials);
+        }
+        if (state.completed < cfg.trials) {
+          setTimeout(step, 0);
+        } else {
+          resolve(finalizeSimulation(state));
+        }
+      } catch (err) {
+        reject(err);
+      }
+    }
+
+    setTimeout(step, 0);
+  });
+}
+
+// === web/app.js ===
+const PRESETS = [
+  {
+    id: 'flop_4way',
+    label: '4-Way Flop Clash (LAG vs Station vs Nit vs TAG)',
+    trials: 10000,
+    stackBB: 100,
+    startingPotBB: 12,
+    startMode: 'street',
+    board: 'Ah 7d 2c',
+    players: [
+      { name: 'Hero', cards: 'As Ks', type: 'aggressive' },
+      { name: 'Station', cards: 'Jh Ts', type: 'calling_station' },
+      { name: 'Nit', cards: 'Qh Qd', type: 'nit' },
+      { name: 'Villain', cards: '??', type: 'tag' },
+    ],
+  },
+  {
+    id: 'nit_draw_vs_2agg',
+    label: 'Nit on Flush Draw vs 2 Aggressive Players',
+    trials: 10000,
+    stackBB: 100,
+    startingPotBB: 9,
+    startMode: 'street',
+    board: 'Kh 7h 2c',
+    players: [
+      { name: 'Agg1', cards: 'Ks Qd', type: 'aggressive' },
+      { name: 'Agg2', cards: '7c 7s', type: 'aggressive' },
+      { name: 'NitDraw', cards: 'Ah 9h', type: 'nit' },
+    ],
+  },
+  {
+    id: 'aa_vs_kk',
+    label: 'AA vs KK Preflop Classic',
+    trials: 10000,
+    stackBB: 100,
+    startingPotBB: 6,
+    startMode: 'street',
+    board: '',
+    players: [
+      { name: 'Aces', cards: 'As Ad', type: 'tag' },
+      { name: 'Kings', cards: 'Ks Kd', type: 'aggressive' },
+    ],
+  },
+  {
+    id: 'set_vs_draw',
+    label: 'Set vs Nut Flush Draw on Flop',
+    trials: 10000,
+    stackBB: 100,
+    startingPotBB: 10,
+    startMode: 'street',
+    board: 'Qh 7h 2s',
+    players: [
+      { name: 'Set', cards: '7c 7s', type: 'tag' },
+      { name: 'FlushDraw', cards: 'Ah Kh', type: 'aggressive' },
+      { name: 'TopPair', cards: 'Qd Jd', type: 'calling_station' },
+    ],
+  },
+  {
+    id: 'sixmax_types',
+    label: '6-Max Archetype Battle (All Random Cards)',
+    trials: 10000,
+    stackBB: 100,
+    startingPotBB: 18,
+    startMode: 'preflop',
+    board: '',
+    players: [
+      { name: 'Aggressive', cards: '??', type: 'aggressive' },
+      { name: 'Station', cards: '??', type: 'calling_station' },
+      { name: 'Nit', cards: '??', type: 'nit' },
+      { name: 'TAG', cards: '??', type: 'tag' },
+      { name: 'Maniac', cards: '??', type: 'maniac' },
+      { name: 'Showdown', cards: '??', type: 'showdown' },
+    ],
+  },
+  {
+    id: 'river_bluff',
+    label: 'River Bluff Catcher (Station vs LAG)',
+    trials: 5000,
+    stackBB: 100,
+    startingPotBB: 24,
+    startMode: 'street',
+    board: 'Ks 7h 4d 2c 3s',
+    players: [
+      { name: 'Bluffer', cards: '9s 8s', type: 'aggressive' },
+      { name: 'Catcher', cards: 'Kd Qc', type: 'calling_station' },
+    ],
+  },
+];
+
+const DEFAULT_TYPE_CYCLE = ['aggressive', 'calling_station', 'nit', 'tag', 'maniac', 'showdown'];
+
+const state = {
+  players: [],
+  board: [null, null, null, null, null],
+  trials: 10000,
+  stackBB: 100,
+  startingPotBB: 12,
+  startMode: 'street',
+  seed: '',
+  fourColor: true,
+  activeSlot: { kind: 'player', seat: 0, cardIdx: 0 },
+  archetypeConfigs: getDefaultArchetypeParams(),
+  selectedArchId: 'nit',
+  running: false,
+  lastResult: null,
+  selectedSampleIdx: 0,
+  error: null,
+};
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function loadPreset(presetId) {
+  const preset = PRESETS.find((p) => p.id === presetId) || PRESETS[0];
+  state.trials = preset.trials;
+  state.stackBB = preset.stackBB;
+  state.startingPotBB = preset.startingPotBB;
+  state.startMode = preset.startMode;
+  state.board = parseCardList(preset.board, 5);
+  state.players = preset.players.map((p) => ({
+    name: p.name,
+    cards: parseCardList(p.cards, 2),
+    type: p.type,
+    stackBB: preset.stackBB,
+  }));
+  state.activeSlot = { kind: 'player', seat: 0, cardIdx: 0 };
+  state.error = null;
+  renderAll();
+}
+
+function setPlayerCount(newCount) {
+  const count = Math.max(2, Math.min(9, newCount));
+  while (state.players.length < count) {
+    const idx = state.players.length;
+    state.players.push({
+      name: `Seat ${idx + 1}`,
+      cards: [null, null],
+      type: DEFAULT_TYPE_CYCLE[idx % DEFAULT_TYPE_CYCLE.length],
+      stackBB: state.stackBB,
+    });
+  }
+  if (state.players.length > count) {
+    state.players.length = count;
+  }
+  if (state.activeSlot.kind === 'player' && state.activeSlot.seat >= count) {
+    state.activeSlot = { kind: 'player', seat: count - 1, cardIdx: 0 };
+  }
+  state.startingPotBB = Math.max(4, count * 3);
+  state.error = null;
+  renderAll();
+}
+
+function getCardOwnerMap() {
+  const map = new Map();
+  state.players.forEach((p, idx) => {
+    p.cards.forEach((c) => {
+      if (c !== null) map.set(c, `S${idx + 1}`);
+    });
+  });
+  state.board.forEach((c, idx) => {
+    if (c !== null) {
+      const lbl = idx < 3 ? `F${idx + 1}` : idx === 3 ? 'T' : 'R';
+      map.set(c, lbl);
+    }
+  });
+  return map;
+}
+
+function assignCardToActiveSlot(cardId) {
+  const owners = getCardOwnerMap();
+  if (cardId !== null && owners.has(cardId)) return;
+
+  const slot = state.activeSlot;
+  if (slot.kind === 'board') {
+    state.board[slot.index] = cardId;
+    if (cardId !== null) advanceSlot();
+  } else {
+    state.players[slot.seat].cards[slot.cardIdx] = cardId;
+    if (cardId !== null) advanceSlot();
+  }
+  state.error = null;
+  renderSetup();
+}
+
+function advanceSlot() {
+  const slot = state.activeSlot;
+  if (slot.kind === 'board') {
+    for (let i = slot.index + 1; i < 5; i++) {
+      if (state.board[i] === null) {
+        state.activeSlot = { kind: 'board', index: i };
+        return;
+      }
+    }
+    return;
+  }
+
+  // Player slot: try card 2 of same seat, then next empty seat slot
+  if (slot.cardIdx === 0 && state.players[slot.seat].cards[1] === null) {
+    state.activeSlot = { kind: 'player', seat: slot.seat, cardIdx: 1 };
+    return;
+  }
+  for (let s = slot.seat + 1; s < state.players.length; s++) {
+    for (let ci = 0; ci < 2; ci++) {
+      if (state.players[s].cards[ci] === null) {
+        state.activeSlot = { kind: 'player', seat: s, cardIdx: ci };
+        return;
+      }
+    }
+  }
+  // If all players ahead are filled, try board flop slots
+  for (let i = 0; i < 3; i++) {
+    if (state.board[i] === null) {
+      state.activeSlot = { kind: 'board', index: i };
+      return;
+    }
+  }
+}
+
+function dealRandomFlop() {
+  state.board = [null, null, null, null, null];
+  const freshOwners = getCardOwnerMap();
+  const avail = [];
+  for (let c = 0; c < 52; c++) {
+    if (!freshOwners.has(c)) avail.push(c);
+  }
+  for (let i = 0; i < 3; i++) {
+    const pick = Math.floor(Math.random() * avail.length);
+    state.board[i] = avail.splice(pick, 1)[0];
+  }
+  state.activeSlot = { kind: 'board', index: 3 };
+  renderSetup();
+}
+
+function clearAllCards() {
+  state.board = [null, null, null, null, null];
+  state.players.forEach((p) => {
+    p.cards = [null, null];
+  });
+  state.activeSlot = { kind: 'player', seat: 0, cardIdx: 0 };
+  renderSetup();
+}
+
+function renderCardContent(cardId) {
+  if (cardId === null || cardId === undefined) {
+    return `<span class="text-sm font-semibold opacity-60">?</span>`;
+  }
+  const r = RANKS[cardRank(cardId)];
+  const s = SUITS[cardSuit(cardId)];
+  const sym = SUIT_SYMBOLS[s];
+  return `<span class="suit-${s} text-sm leading-none">${r}</span><span class="suit-${s} text-base leading-none mt-0.5">${sym}</span>`;
+}
+
+function renderMiniCard(cardStr) {
+  if (!cardStr || cardStr === '??' || cardStr === '?') {
+    return `<span class="poker-card-mini is-unknown">?</span>`;
+  }
+  // Supports both "As" and "A♠"
+  let r = cardStr.slice(0, -1);
+  let rawSuit = cardStr.slice(-1);
+  let suitKey = rawSuit;
+  if (rawSuit === '♠') suitKey = 's';
+  else if (rawSuit === '♥') suitKey = 'h';
+  else if (rawSuit === '♦') suitKey = 'd';
+  else if (rawSuit === '♣') suitKey = 'c';
+  const sym = SUIT_SYMBOLS[suitKey] || rawSuit;
+  return `<span class="poker-card-mini suit-${suitKey}">${escapeHtml(r)}${sym}</span>`;
+}
+
+function getActiveSlotLabel() {
+  const s = state.activeSlot;
+  if (s.kind === 'board') {
+    const names = ['Flop 1', 'Flop 2', 'Flop 3', 'Turn', 'River'];
+    return `Community Board · ${names[s.index]}`;
+  }
+  const positions = getPositionNames(state.players.length);
+  const p = state.players[s.seat];
+  return `${p.name} (${positions[s.seat]}) · Card ${s.cardIdx + 1}`;
+}
+
+function buildScenarioConfig() {
+  const archetypeOverrides = {};
+  for (const [id, params] of Object.entries(state.archetypeConfigs)) {
+    archetypeOverrides[id] = { ...params };
+  }
+  return {
+    trials: state.trials,
+    stackBB: state.stackBB,
+    startingPotBB: state.startingPotBB,
+    startMode: state.startMode,
+    seed: state.seed.trim() !== '' ? state.seed.trim() : null,
+    archetypeOverrides,
+    board: state.board.map((c) => (c !== null ? cardToString(c) : null)),
+    players: state.players.map((p) => ({
+      name: p.name.trim() || 'Player',
+      cards: p.cards.map((c) => (c !== null ? cardToString(c) : null)),
+      type: p.type,
+      stackBB: p.stackBB,
+    })),
+  };
+}
+
+async function handleRunSimulation() {
+  if (state.running) return;
+  state.running = true;
+  state.error = null;
+  updateRunButton(0, state.trials);
+
+  try {
+    const cfg = buildScenarioConfig();
+    const batchSize = state.trials >= 50000 ? 2500 : state.trials >= 20000 ? 1000 : 500;
+    const res = await runSimulationAsync(
+      cfg,
+      (done, total) => updateRunButton(done, total),
+      batchSize
+    );
+    state.lastResult = res;
+    state.selectedSampleIdx = 0;
+  } catch (err) {
+    state.error = err.message || String(err);
+  } finally {
+    state.running = false;
+    updateRunButton(state.trials, state.trials);
+    renderError();
+    renderResults();
+  }
+}
+
+function updateRunButton(done, total) {
+  const btn = document.getElementById('run-sim-btn');
+  const progWrap = document.getElementById('sim-progress-wrap');
+  const progBar = document.getElementById('sim-progress-bar');
+  const progText = document.getElementById('sim-progress-text');
+  if (!btn) return;
+
+  if (state.running) {
+    btn.disabled = true;
+    btn.textContent = 'Running Simulation…';
+    if (progWrap) progWrap.classList.remove('hidden');
+    const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    if (progBar) progBar.style.width = `${pct}%`;
+    if (progText) progText.textContent = `${done.toLocaleString()} / ${total.toLocaleString()} hands (${pct}%)`;
+  } else {
+    btn.disabled = false;
+    btn.textContent = `Run ${state.trials.toLocaleString()} Hands`;
+    if (progWrap) progWrap.classList.add('hidden');
+  }
+}
+
+function renderError() {
+  const el = document.getElementById('error-banner');
+  if (!el) return;
+  if (!state.error) {
+    el.classList.add('hidden');
+    el.textContent = '';
+  } else {
+    el.classList.remove('hidden');
+    el.textContent = state.error;
+  }
+}
+
+function renderSetup() {
+  document.body.classList.toggle('four-color-deck', state.fourColor);
+
+  // Sync top controls
+  const countEl = document.getElementById('player-count-val');
+  if (countEl) countEl.textContent = String(state.players.length);
+
+  const trialsSel = document.getElementById('trials-select');
+  if (trialsSel) trialsSel.value = String(state.trials);
+
+  const stackIn = document.getElementById('stack-input');
+  if (stackIn && document.activeElement !== stackIn) stackIn.value = String(state.stackBB);
+
+  const potIn = document.getElementById('pot-input');
+  if (potIn && document.activeElement !== potIn) potIn.value = String(state.startingPotBB);
+
+  const modeSel = document.getElementById('mode-select');
+  if (modeSel) modeSel.value = state.startMode;
+
+  const boardCount = state.board.filter((c) => c !== null).length;
+  const potGroup = document.getElementById('starting-pot-group');
+  if (potGroup) {
+    potGroup.classList.toggle('opacity-50', boardCount === 0 || state.startMode === 'preflop');
+  }
+
+  // Render Board Slots
+  const boardContainer = document.getElementById('board-slots');
+  if (boardContainer) {
+    const labels = ['Flop 1', 'Flop 2', 'Flop 3', 'Turn', 'River'];
+    boardContainer.innerHTML = state.board
+      .map((c, idx) => {
+        const isActive = state.activeSlot.kind === 'board' && state.activeSlot.index === idx;
+        const filledClass = c !== null ? 'is-filled' : '';
+        const activeClass = isActive ? 'is-active' : '';
+        const gapClass = idx === 3 || idx === 4 ? 'ml-1.5' : '';
+        return `
+          <div class="flex flex-col items-center gap-1 ${gapClass}">
+            <div
+              class="poker-card poker-card-slot ${filledClass} ${activeClass}"
+              data-slot-kind="board"
+              data-board-idx="${idx}"
+              role="button"
+              tabindex="0"
+              aria-label="${labels[idx]}"
+            >
+              ${renderCardContent(c)}
+              ${c !== null ? `<button type="button" class="card-clear-btn" data-clear-board="${idx}" title="Clear card">×</button>` : ''}
+            </div>
+            <span class="text-xs text-[var(--muted-foreground)]">${labels[idx]}</span>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  // Render Player Seats
+  const seatsContainer = document.getElementById('seats-container');
+  const positions = getPositionNames(state.players.length);
+  if (seatsContainer) {
+    seatsContainer.innerHTML = state.players
+      .map((p, idx) => {
+        const arch = ARCHETYPES[p.type] || ARCHETYPES.tag;
+        const slot0Active =
+          state.activeSlot.kind === 'player' && state.activeSlot.seat === idx && state.activeSlot.cardIdx === 0;
+        const slot1Active =
+          state.activeSlot.kind === 'player' && state.activeSlot.seat === idx && state.activeSlot.cardIdx === 1;
+
+        const archOptions = ARCHETYPE_LIST.map(
+          (a) => `<option value="${a.id}" ${a.id === p.type ? 'selected' : ''}>${escapeHtml(a.name)}</option>`
+        ).join('');
+
+        return `
+          <div class="p-3 rounded-lg bg-[var(--content)] border border-[var(--card-border)] flex flex-col gap-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0 flex-1">
+                <span class="px-1.5 py-0.5 text-xs font-mono font-semibold rounded bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] shrink-0">
+                  ${positions[idx]}
+                </span>
+                <input
+                  type="text"
+                  value="${escapeHtml(p.name)}"
+                  data-seat-name="${idx}"
+                  maxlength="18"
+                  aria-label="Seat ${idx + 1} name"
+                  class="w-full min-w-0 bg-transparent text-sm font-semibold text-[var(--foreground)] border-b border-transparent focus:border-[var(--primary)] focus:outline-none px-0.5"
+                />
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <label class="text-xs text-[var(--muted-foreground)] flex items-center gap-1" title="Seat starting stack in BB">
+                  <input
+                    type="number"
+                    min="5"
+                    max="1000"
+                    step="5"
+                    value="${p.stackBB}"
+                    data-seat-stack="${idx}"
+                    class="w-14 px-1.5 py-0.5 text-xs text-right tabular-nums rounded bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)]"
+                  />
+                  <span>BB</span>
+                </label>
+                <button
+                  type="button"
+                  data-clear-seat="${idx}"
+                  title="Randomize hole cards"
+                  class="px-1.5 py-0.5 text-xs rounded border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--card)]"
+                >
+                  ??
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <div class="flex items-center gap-1.5 shrink-0">
+                ${[0, 1]
+                  .map((ci) => {
+                    const cardId = p.cards[ci];
+                    const active = ci === 0 ? slot0Active : slot1Active;
+                    return `
+                      <div
+                        class="poker-card poker-card-slot ${cardId !== null ? 'is-filled' : ''} ${active ? 'is-active' : ''}"
+                        data-slot-kind="player"
+                        data-seat-idx="${idx}"
+                        data-card-idx="${ci}"
+                        role="button"
+                        tabindex="0"
+                        aria-label="${escapeHtml(p.name)} card ${ci + 1}"
+                      >
+                        ${renderCardContent(cardId)}
+                        ${
+                          cardId !== null
+                            ? `<button type="button" class="card-clear-btn" data-clear-player-card="${idx}:${ci}" title="Clear card">×</button>`
+                            : ''
+                        }
+                      </div>
+                    `;
+                  })
+                  .join('')}
+              </div>
+
+              <div class="flex-1 min-w-0 flex flex-col gap-1">
+                <select
+                  data-seat-type="${idx}"
+                  aria-label="Archetype for ${escapeHtml(p.name)}"
+                  class="w-full px-2 py-1.5 text-xs font-medium rounded-md bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
+                >
+                  ${archOptions}
+                </select>
+                <p class="text-xs text-[var(--muted-foreground)] leading-snug truncate" title="${escapeHtml(arch.description)}">
+                  ${escapeHtml(arch.tagline)}
+                </p>
+              </div>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  // Render 52-card Deck Picker
+  const targetLabel = document.getElementById('picker-target-label');
+  if (targetLabel) targetLabel.textContent = getActiveSlotLabel();
+
+  const deckGrid = document.getElementById('deck-picker-grid');
+  if (deckGrid) {
+    const owners = getCardOwnerMap();
+    const rankOrder = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]; // A down to 2
+    deckGrid.innerHTML = SUITS.map((suitKey, suitIdx) => {
+      const sym = SUIT_SYMBOLS[suitKey];
+      const buttons = rankOrder
+        .map((rankIdx) => {
+          const cardId = makeCard(rankIdx, suitIdx);
+          const owner = owners.get(cardId);
+          return `
+            <button
+              type="button"
+              class="deck-btn suit-${suitKey}"
+              data-pick-card="${cardId}"
+              ${owner ? 'disabled' : ''}
+              title="${RANKS[rankIdx]}${sym}${owner ? ` (assigned to ${owner})` : ''}"
+            >
+              <span>${RANKS[rankIdx]}</span>
+              <span class="text-xs leading-none">${sym}</span>
+              ${owner ? `<span class="owner-tag">${owner}</span>` : ''}
+            </button>
+          `;
+        })
+        .join('');
+      return `<div class="grid grid-cols-13 gap-1" style="grid-template-columns: repeat(13, minmax(0, 1fr));">${buttons}</div>`;
+    }).join('');
+  }
+
+  updateRunButton(state.trials, state.trials);
+}
+
+function renderResults() {
+  const section = document.getElementById('results-section');
+  if (!section) return;
+
+  const res = state.lastResult;
+  if (!res) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+
+  // Top winning hand category at showdown
+  const topHand = res.handRankDistribution.reduce(
+    (best, cur) => (cur.count > best.count ? cur : best),
+    { name: '—', pct: 0, count: 0 }
+  );
+
+  // Best EV player
+  const bestEvSeat = res.players.reduce(
+    (best, p) => (p.evBB > best.evBB ? p : best),
+    res.players[0]
+  );
+
+  const kpiEl = document.getElementById('results-kpis');
+  if (kpiEl) {
+    const boardDisp = res.board.filter(Boolean);
+    kpiEl.innerHTML = `
+      <div class="p-3 rounded-lg bg-[var(--content)] border border-[var(--card-border)]">
+        <div class="text-xs text-[var(--muted-foreground)]">Simulated Hands</div>
+        <div class="text-lg font-bold tabular-nums text-[var(--foreground)] mt-0.5">${res.trials.toLocaleString()}</div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5">${res.elapsedMs} ms · ${STREET_NAMES[res.startStreet]} start</div>
+      </div>
+      <div class="p-3 rounded-lg bg-[var(--content)] border border-[var(--card-border)]">
+        <div class="text-xs text-[var(--muted-foreground)]">Average Pot</div>
+        <div class="text-lg font-bold tabular-nums text-[var(--foreground)] mt-0.5">${res.avgPotBB.toFixed(1)} BB</div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5">${boardDisp.length > 0 ? `Board: ${boardDisp.join(' ')}` : 'Full random board'}</div>
+      </div>
+      <div class="p-3 rounded-lg bg-[var(--content)] border border-[var(--card-border)]">
+        <div class="text-xs text-[var(--muted-foreground)]">Showdown Rate</div>
+        <div class="text-lg font-bold tabular-nums text-[var(--foreground)] mt-0.5">${res.showdownPct.toFixed(1)}%</div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5">${(100 - res.showdownPct).toFixed(1)}% won by fold</div>
+      </div>
+      <div class="p-3 rounded-lg bg-[var(--content)] border border-[var(--card-border)]">
+        <div class="text-xs text-[var(--muted-foreground)]">Top EV Seat</div>
+        <div class="text-lg font-bold text-[var(--foreground)] mt-0.5 truncate">${escapeHtml(bestEvSeat.name)}</div>
+        <div class="text-xs font-mono tabular-nums mt-0.5" style="color: var(--success);">
+          ${bestEvSeat.evBB >= 0 ? '+' : ''}${bestEvSeat.evBB.toFixed(2)} BB/hand · Top hand: ${escapeHtml(topHand.name)}
+        </div>
+      </div>
+    `;
+  }
+
+  // Per-Player Results Table
+  const tbody = document.getElementById('results-table-body');
+  if (tbody) {
+    tbody.innerHTML = res.players
+      .map((p) => {
+        const evColor =
+          p.evBB > 0.05 ? 'var(--success)' : p.evBB < -0.05 ? 'var(--error)' : 'var(--muted-foreground)';
+        const evSign = p.evBB >= 0 ? '+' : '';
+        const deltaEq = p.actualEquityPct - p.rawEquityPct;
+        const deltaSign = deltaEq >= 0 ? '+' : '';
+        const deltaColor =
+          deltaEq > 1 ? 'var(--success)' : deltaEq < -1 ? 'var(--error)' : 'var(--muted-foreground)';
+
+        return `
+          <tr class="border-t border-[var(--card-border)] hover:bg-[var(--content)] transition-colors">
+            <td class="py-2.5 px-3">
+              <div class="flex items-center gap-2">
+                <span class="px-1.5 py-0.5 text-xs font-mono rounded bg-[var(--content)] border border-[var(--border)]">${p.position}</span>
+                <div>
+                  <div class="font-semibold text-sm text-[var(--foreground)]">${escapeHtml(p.name)}</div>
+                  <div class="text-xs text-[var(--muted-foreground)]">${escapeHtml(p.archetypeShort)}</div>
+                </div>
+              </div>
+            </td>
+            <td class="py-2.5 px-2 whitespace-nowrap">
+              <div class="flex items-center gap-1">
+                ${renderMiniCard(p.cards[0])}
+                ${renderMiniCard(p.cards[1])}
+              </div>
+            </td>
+            <td class="py-2.5 px-3 min-w-[140px]">
+              <div class="flex items-baseline justify-between gap-2 text-xs tabular-nums">
+                <span class="font-semibold text-[var(--foreground)]">${p.actualEquityPct.toFixed(1)}%</span>
+                <span class="text-[var(--muted-foreground)]">Tie ${p.tiePct.toFixed(1)}%</span>
+              </div>
+              <div class="bar-track mt-1">
+                <div class="bar-fill" style="width: ${Math.min(100, p.actualEquityPct)}%; background: var(--chart-1);"></div>
+              </div>
+            </td>
+            <td class="py-2.5 px-3 min-w-[140px]">
+              <div class="flex items-baseline justify-between gap-2 text-xs tabular-nums">
+                <span class="font-medium text-[var(--foreground)]">${p.rawEquityPct.toFixed(1)}%</span>
+                <span class="font-mono" style="color: ${deltaColor};" title="Strategy impact (Actual Win% minus Raw Showdown Equity%)">
+                  ${deltaSign}${deltaEq.toFixed(1)}%
+                </span>
+              </div>
+              <div class="bar-track mt-1">
+                <div class="bar-fill" style="width: ${Math.min(100, p.rawEquityPct)}%; background: var(--chart-2);"></div>
+              </div>
+            </td>
+            <td class="py-2.5 px-3 text-right whitespace-nowrap tabular-nums">
+              <div class="font-bold text-sm font-mono" style="color: ${evColor};">${evSign}${p.evBB.toFixed(2)} BB</div>
+              <div class="text-xs text-[var(--muted-foreground)]">±${p.evCi95BB.toFixed(2)}</div>
+            </td>
+            <td class="py-2.5 px-2.5 text-right text-xs tabular-nums text-[var(--foreground)]">${p.foldPct.toFixed(1)}%</td>
+            <td class="py-2.5 px-2.5 text-right text-xs tabular-nums text-[var(--foreground)]">${p.wtsdPct.toFixed(1)}%</td>
+            <td class="py-2.5 px-2.5 text-right text-xs tabular-nums text-[var(--foreground)]">${p.vpipPct.toFixed(1)}%</td>
+            <td class="py-2.5 px-3 text-right text-xs tabular-nums text-[var(--foreground)]">${p.aggPct.toFixed(1)}%</td>
+          </tr>
+        `;
+      })
+      .join('');
+  }
+
+  // Street breakdown chart
+  const streetEl = document.getElementById('street-breakdown');
+  if (streetEl) {
+    streetEl.innerHTML = res.streetBreakdown
+      .map(
+        (s, idx) => `
+        <div class="space-y-1">
+          <div class="flex justify-between text-xs tabular-nums">
+            <span class="text-[var(--foreground)] font-medium">${s.label}</span>
+            <span class="text-[var(--muted-foreground)]">${s.pct.toFixed(1)}% (${s.count.toLocaleString()})</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: ${Math.min(100, s.pct)}%; background: var(--chart-${(idx % 5) + 1});"></div>
+          </div>
+        </div>
+      `
+      )
+      .join('');
+  }
+
+  // Winning hand rank distribution
+  const rankEl = document.getElementById('hand-rank-breakdown');
+  if (rankEl) {
+    const activeRanks = res.handRankDistribution.slice().reverse();
+    rankEl.innerHTML = activeRanks
+      .map(
+        (h) => `
+        <div class="grid grid-cols-[112px_1fr_54px] items-center gap-2 text-xs tabular-nums">
+          <span class="text-[var(--foreground)] truncate">${h.name}</span>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: ${Math.min(100, h.pct)}%; background: var(--chart-3);"></div>
+          </div>
+          <span class="text-right text-[var(--muted-foreground)]">${h.pct.toFixed(1)}%</span>
+        </div>
+      `
+      )
+      .join('');
+  }
+
+  renderSampleHands();
+}
+
+function renderSampleHands() {
+  const res = state.lastResult;
+  const tabsEl = document.getElementById('sample-hand-tabs');
+  const bodyEl = document.getElementById('sample-hand-body');
+  if (!res || !tabsEl || !bodyEl) return;
+
+  if (!res.sampleHands || res.sampleHands.length === 0) {
+    tabsEl.innerHTML = '';
+    bodyEl.innerHTML = '<p class="text-xs text-[var(--muted-foreground)]">No sample hands recorded.</p>';
+    return;
+  }
+
+  tabsEl.innerHTML = res.sampleHands
+    .map((h, idx) => {
+      const active = idx === state.selectedSampleIdx;
+      return `
+        <button
+          type="button"
+          data-sample-idx="${idx}"
+          class="px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+            active
+              ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-transparent'
+              : 'bg-[var(--content)] text-[var(--foreground)] border-[var(--border)] hover:bg-[var(--card)]'
+          }"
+        >
+          Hand #${idx + 1} (${h.endedStreet})
+        </button>
+      `;
+    })
+    .join('');
+
+  const hand = res.sampleHands[state.selectedSampleIdx] || res.sampleHands[0];
+  const dealtSeatsHtml = res.players
+    .map((p, idx) => {
+      const hole = hand.holes[idx] || ['?', '?'];
+      const isWinner = hand.winners.some((w) => w.seat === idx);
+      return `
+        <div class="px-2.5 py-1.5 rounded-md border ${
+          isWinner ? 'border-[var(--success)] bg-[var(--card)]' : 'border-[var(--card-border)] bg-[var(--content)]'
+        } flex items-center gap-2 text-xs">
+          <span class="font-semibold text-[var(--foreground)]">${escapeHtml(p.name)}</span>
+          <span class="text-[var(--muted-foreground)]">(${p.archetypeShort})</span>
+          <span class="flex items-center gap-1">${renderMiniCard(hole[0])}${renderMiniCard(hole[1])}</span>
+        </div>
+      `;
+    })
+    .join('');
+
+  const boardHtml = hand.board.map((c) => renderMiniCard(c)).join('');
+  const logLines = hand.events
+    .map((line) => {
+      const isHeader = line.startsWith('—') || line.startsWith('Starting') || line.startsWith('Preflop');
+      const isResult = line.startsWith('Result:') || line.includes('→ WINS');
+      const cls = isResult
+        ? 'font-semibold text-[var(--foreground)]'
+        : isHeader
+          ? 'font-semibold text-[var(--foreground)] pt-1'
+          : 'text-[var(--muted-foreground)]';
+      return `<div class="${cls} font-mono text-xs leading-relaxed">${escapeHtml(line)}</div>`;
+    })
+    .join('');
+
+  bodyEl.innerHTML = `
+    <div class="space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[var(--card-border)]">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-xs font-medium text-[var(--muted-foreground)] mr-1">Full Board:</span>
+          ${boardHtml}
+        </div>
+        <span class="text-xs font-mono text-[var(--muted-foreground)]">Final Pot: ${(hand.pot / res.bb).toFixed(1)} BB</span>
+      </div>
+      <div class="flex flex-wrap gap-2">${dealtSeatsHtml}</div>
+      <div class="p-3 rounded-lg bg-[var(--content)] border border-[var(--card-border)] hand-log-scroll space-y-0.5">
+        ${logLines}
+      </div>
+    </div>
+  `;
+}
+
+function isArchetypeModified(archId) {
+  const def = ARCHETYPES[archId]?.params;
+  const cur = state.archetypeConfigs[archId];
+  if (!def || !cur) return false;
+  return ARCHETYPE_PARAM_DEFS.some((p) => Number(cur[p.key]) !== Number(def[p.key]));
+}
+
+function renderArchetypeMatrix() {
+  const tbody = document.getElementById('archetype-matrix-body');
+  if (!tbody) return;
+  const configurable = ARCHETYPE_LIST.filter((a) => a.params);
+  tbody.innerHTML = configurable
+    .map((a) => {
+      const cfg = state.archetypeConfigs[a.id] || a.params;
+      const selected = a.id === state.selectedArchId;
+      const modified = isArchetypeModified(a.id);
+      return `
+        <tr
+          data-arch-row="${a.id}"
+          class="border-t border-[var(--card-border)] cursor-pointer transition-colors ${
+            selected ? 'bg-[var(--card)] font-semibold' : 'hover:bg-[var(--card)]'
+          }"
+        >
+          <td class="py-2 px-2.5 text-[var(--foreground)] whitespace-nowrap">
+            ${escapeHtml(a.shortName)}${modified ? ' <span title="Customized" style="color: var(--primary);">•</span>' : ''}
+          </td>
+          <td class="py-2 px-1.5 text-right text-[var(--foreground)]">${cfg.preflopLooseness}%</td>
+          <td class="py-2 px-1.5 text-right text-[var(--foreground)]">${cfg.preflopAggression}%</td>
+          <td class="py-2 px-1.5 text-right text-[var(--foreground)]">${cfg.foldToPressure}%</td>
+          <td class="py-2 px-1.5 text-right text-[var(--foreground)]">${cfg.drawDefense}%</td>
+          <td class="py-2 px-1.5 text-right text-[var(--foreground)]">${cfg.postflopAggression}%</td>
+          <td class="py-2 px-1.5 text-right text-[var(--foreground)]">${cfg.bluffFreq}%</td>
+          <td class="py-2 px-2 text-right text-[var(--foreground)]">${cfg.betSizePct}%</td>
+        </tr>
+      `;
+    })
+    .join('');
+}
+
+function renderArchetypeConfig() {
+  const tabsEl = document.getElementById('archetype-tabs');
+  const descEl = document.getElementById('archetype-selected-desc');
+  const slidersEl = document.getElementById('archetype-sliders');
+  if (!tabsEl || !slidersEl) return;
+
+  const configurable = ARCHETYPE_LIST.filter((a) => a.params);
+  const seatCounts = new Map();
+  state.players.forEach((p) => {
+    seatCounts.set(p.type, (seatCounts.get(p.type) || 0) + 1);
+  });
+
+  tabsEl.innerHTML = configurable
+    .map((a) => {
+      const active = a.id === state.selectedArchId;
+      const count = seatCounts.get(a.id) || 0;
+      const modified = isArchetypeModified(a.id);
+      const countBadge = count > 0 ? ` (${count})` : '';
+      const modDot = modified ? ' •' : '';
+      return `
+        <button
+          type="button"
+          data-arch-tab="${a.id}"
+          class="px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+            active
+              ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-transparent'
+              : 'bg-[var(--content)] text-[var(--foreground)] border-[var(--border)] hover:bg-[var(--card)]'
+          }"
+        >
+          ${escapeHtml(a.name)}${countBadge}${modDot}
+        </button>
+      `;
+    })
+    .join('');
+
+  const arch = ARCHETYPES[state.selectedArchId] || configurable[0];
+  const cfg = state.archetypeConfigs[arch.id] || arch.params;
+
+  if (descEl) {
+    descEl.textContent = arch.description;
+  }
+
+  slidersEl.innerHTML = ARCHETYPE_PARAM_DEFS.map((def) => {
+    const val = cfg[def.key];
+    return `
+      <div class="space-y-1">
+        <div class="flex items-center justify-between gap-2 text-xs">
+          <label for="slider-${def.key}" class="font-medium text-[var(--foreground)]">${escapeHtml(def.label)}</label>
+          <span id="slider-val-${def.key}" class="font-mono font-semibold tabular-nums text-[var(--foreground)]">${val}${def.unit}</span>
+        </div>
+        <input
+          id="slider-${def.key}"
+          type="range"
+          min="${def.min}"
+          max="${def.max}"
+          step="${def.step}"
+          value="${val}"
+          data-arch-slider="${def.key}"
+          class="w-full accent-[var(--primary)] cursor-pointer"
+        />
+        <div class="text-xs text-[var(--muted-foreground)] leading-snug">${escapeHtml(def.desc)}</div>
+      </div>
+    `;
+  }).join('');
+
+  renderArchetypeMatrix();
+}
+
+function renderAll() {
+  renderSetup();
+  renderArchetypeConfig();
+  renderError();
+  renderResults();
+}
+
+function initUI() {
+  // Populate preset selector
+  const presetSel = document.getElementById('preset-select');
+  if (presetSel) {
+    presetSel.innerHTML = PRESETS.map(
+      (p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`
+    ).join('');
+    presetSel.addEventListener('change', (e) => {
+      loadPreset(e.target.value);
+      handleRunSimulation();
+    });
+  }
+
+  document.getElementById('dec-players-btn')?.addEventListener('click', () => {
+    setPlayerCount(state.players.length - 1);
+  });
+  document.getElementById('inc-players-btn')?.addEventListener('click', () => {
+    setPlayerCount(state.players.length + 1);
+  });
+
+  document.getElementById('trials-select')?.addEventListener('change', (e) => {
+    state.trials = Number(e.target.value) || 10000;
+    updateRunButton(state.trials, state.trials);
+  });
+
+  document.getElementById('stack-input')?.addEventListener('change', (e) => {
+    const val = Math.max(5, Math.min(1000, Number(e.target.value) || 100));
+    state.stackBB = val;
+    state.players.forEach((p) => {
+      p.stackBB = val;
+    });
+    renderSetup();
+  });
+
+  document.getElementById('pot-input')?.addEventListener('change', (e) => {
+    state.startingPotBB = Math.max(2, Math.min(500, Number(e.target.value) || 12));
+  });
+
+  document.getElementById('mode-select')?.addEventListener('change', (e) => {
+    state.startMode = e.target.value;
+    renderSetup();
+  });
+
+  document.getElementById('seed-input')?.addEventListener('input', (e) => {
+    state.seed = e.target.value;
+  });
+
+  document.getElementById('four-color-toggle')?.addEventListener('change', (e) => {
+    state.fourColor = e.target.checked;
+    document.body.classList.toggle('four-color-deck', state.fourColor);
+  });
+
+  document.getElementById('clear-board-btn')?.addEventListener('click', () => {
+    state.board = [null, null, null, null, null];
+    state.activeSlot = { kind: 'board', index: 0 };
+    renderSetup();
+  });
+
+  document.getElementById('random-flop-btn')?.addEventListener('click', dealRandomFlop);
+  document.getElementById('set-random-slot-btn')?.addEventListener('click', () => assignCardToActiveSlot(null));
+  document.getElementById('clear-all-cards-btn')?.addEventListener('click', clearAllCards);
+  document.getElementById('reset-btn')?.addEventListener('click', () => {
+    const presetSelEl = document.getElementById('preset-select');
+    loadPreset(presetSelEl ? presetSelEl.value : PRESETS[0].id);
+  });
+
+  document.getElementById('reset-arch-btn')?.addEventListener('click', () => {
+    const def = ARCHETYPES[state.selectedArchId]?.params;
+    if (def) {
+      state.archetypeConfigs[state.selectedArchId] = { ...def };
+      renderArchetypeConfig();
+    }
+  });
+
+  document.getElementById('reset-all-arch-btn')?.addEventListener('click', () => {
+    state.archetypeConfigs = getDefaultArchetypeParams();
+    renderArchetypeConfig();
+  });
+
+  document.getElementById('apply-arch-run-btn')?.addEventListener('click', handleRunSimulation);
+  document.getElementById('run-sim-btn')?.addEventListener('click', handleRunSimulation);
+
+  document.getElementById('copy-json-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const text = JSON.stringify(buildScenarioConfig(), null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      const prev = btn.textContent;
+      btn.textContent = 'Copied JSON!';
+      setTimeout(() => {
+        btn.textContent = prev;
+      }, 1500);
+    } catch {
+      window.prompt('Copy scenario JSON:', text);
+    }
+  });
+
+  // Delegated click handlers for board, seats, deck, archetype tabs/rows, and sample tabs
+  document.addEventListener('click', (e) => {
+    const clearBoardBtn = e.target.closest('[data-clear-board]');
+    if (clearBoardBtn) {
+      e.stopPropagation();
+      const idx = Number(clearBoardBtn.dataset.clearBoard);
+      state.board[idx] = null;
+      state.activeSlot = { kind: 'board', index: idx };
+      renderSetup();
+      return;
+    }
+
+    const clearPlayerCardBtn = e.target.closest('[data-clear-player-card]');
+    if (clearPlayerCardBtn) {
+      e.stopPropagation();
+      const [seat, ci] = clearPlayerCardBtn.dataset.clearPlayerCard.split(':').map(Number);
+      state.players[seat].cards[ci] = null;
+      state.activeSlot = { kind: 'player', seat, cardIdx: ci };
+      renderSetup();
+      return;
+    }
+
+    const clearSeatBtn = e.target.closest('[data-clear-seat]');
+    if (clearSeatBtn) {
+      const seat = Number(clearSeatBtn.dataset.clearSeat);
+      state.players[seat].cards = [null, null];
+      state.activeSlot = { kind: 'player', seat, cardIdx: 0 };
+      renderSetup();
+      return;
+    }
+
+    const slotEl = e.target.closest('[data-slot-kind]');
+    if (slotEl) {
+      if (slotEl.dataset.slotKind === 'board') {
+        state.activeSlot = { kind: 'board', index: Number(slotEl.dataset.boardIdx) };
+      } else {
+        state.activeSlot = {
+          kind: 'player',
+          seat: Number(slotEl.dataset.seatIdx),
+          cardIdx: Number(slotEl.dataset.cardIdx),
+        };
+      }
+      renderSetup();
+      return;
+    }
+
+    const pickBtn = e.target.closest('[data-pick-card]');
+    if (pickBtn && !pickBtn.disabled) {
+      assignCardToActiveSlot(Number(pickBtn.dataset.pickCard));
+      return;
+    }
+
+    const archTab = e.target.closest('[data-arch-tab]');
+    if (archTab) {
+      state.selectedArchId = archTab.dataset.archTab;
+      renderArchetypeConfig();
+      return;
+    }
+
+    const archRow = e.target.closest('[data-arch-row]');
+    if (archRow) {
+      state.selectedArchId = archRow.dataset.archRow;
+      renderArchetypeConfig();
+      return;
+    }
+
+    const sampleTab = e.target.closest('[data-sample-idx]');
+    if (sampleTab) {
+      state.selectedSampleIdx = Number(sampleTab.dataset.sampleIdx);
+      renderSampleHands();
+    }
+  });
+
+  // Delegated input/change handlers for seat name, archetype sliders, seat type, and stack
+  document.addEventListener('input', (e) => {
+    const nameIn = e.target.closest('[data-seat-name]');
+    if (nameIn) {
+      const idx = Number(nameIn.dataset.seatName);
+      state.players[idx].name = nameIn.value;
+      return;
+    }
+    const slider = e.target.closest('[data-arch-slider]');
+    if (slider) {
+      const key = slider.dataset.archSlider;
+      const val = Number(slider.value);
+      const archId = state.selectedArchId;
+      if (state.archetypeConfigs[archId]) {
+        state.archetypeConfigs[archId][key] = val;
+        const valEl = document.getElementById(`slider-val-${key}`);
+        if (valEl) valEl.textContent = `${val}%`;
+        renderArchetypeMatrix();
+      }
+    }
+  });
+
+  document.addEventListener('change', (e) => {
+    const typeSel = e.target.closest('[data-seat-type]');
+    if (typeSel) {
+      const idx = Number(typeSel.dataset.seatType);
+      state.players[idx].type = typeSel.value;
+      if (ARCHETYPES[typeSel.value]?.params) {
+        state.selectedArchId = typeSel.value;
+      }
+      renderSetup();
+      renderArchetypeConfig();
+      return;
+    }
+    const stackIn = e.target.closest('[data-seat-stack]');
+    if (stackIn) {
+      const idx = Number(stackIn.dataset.seatStack);
+      state.players[idx].stackBB = Math.max(5, Math.min(1000, Number(stackIn.value) || state.stackBB));
+      return;
+    }
+    const slider = e.target.closest('[data-arch-slider]');
+    if (slider) {
+      // Refresh tab modified dot after slider release
+      renderArchetypeConfig();
+    }
+  });
+
+  // Backspace/Delete clears currently active card slot when not editing a text box
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+      return;
+    }
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      e.preventDefault();
+      assignCardToActiveSlot(null);
+    }
+  });
+
+  // Load default preset and immediately run an initial simulation
+  loadPreset(PRESETS[0].id);
+  handleRunSimulation();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initUI);
+} else {
+  initUI();
+}
+})();
+  </script>
+</body>
+</html>

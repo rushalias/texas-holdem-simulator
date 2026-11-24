@@ -1,0 +1,13 @@
+{
+  "name": "holdem-sim",
+  "version": "1.0.0",
+  "description": "Interactive Texas Hold'em Monte Carlo Simulator with Player Archetypes",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node server.mjs",
+    "dev": "npm run build && npm start",
+    "test": "node --test tests/simulator.test.js",
+    "cli": "node cli.js"
+  }
+}

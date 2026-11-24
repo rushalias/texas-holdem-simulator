@@ -1,0 +1,166 @@
+/* Custom playing cards & focused interactive controls (theme-aware via semantic variables) */
+
+* {
+  box-sizing: border-box;
+}
+
+.poker-card {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.poker-card-slot {
+  width: 2.85rem;
+  height: 3.85rem;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  background: var(--content);
+  color: var(--muted-foreground);
+}
+
+.poker-card-slot:hover {
+  transform: translateY(-1px);
+  border-color: var(--primary);
+}
+
+.poker-card-slot.is-filled {
+  background: #ffffff;
+  border-color: #d4d4d8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+}
+
+.poker-card-slot.is-active {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-color: var(--primary);
+}
+
+.poker-card-slot .card-clear-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 17px;
+  height: 17px;
+  border-radius: 9999px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 11px;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  z-index: 5;
+}
+
+.poker-card-slot.is-filled:hover .card-clear-btn,
+.poker-card-slot.is-active.is-filled .card-clear-btn {
+  display: inline-flex;
+}
+
+.poker-card-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 2.15rem;
+  height: 1.65rem;
+  padding: 0 0.3rem;
+  border-radius: 0.32rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid #d4d4d8;
+  background: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.poker-card-mini.is-unknown {
+  background: var(--content);
+  border-color: var(--border);
+  color: var(--muted-foreground);
+}
+
+/* Suit colors on crisp ivory/white card face */
+.suit-s { color: #18181b; }
+.suit-h { color: #dc2626; }
+.suit-d { color: #dc2626; }
+.suit-c { color: #18181b; }
+
+/* 4-color deck mode (beloved by poker players for instant suit readability) */
+.four-color-deck .suit-d { color: #2563eb; }
+.four-color-deck .suit-c { color: #15803d; }
+
+/* Deck Picker buttons */
+.deck-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 2.45rem;
+  border-radius: 0.375rem;
+  border: 1px solid #d4d4d8;
+  background: #ffffff;
+  font-weight: 700;
+  font-size: 0.8rem;
+  line-height: 1.05;
+  cursor: pointer;
+  transition: transform 90ms ease, box-shadow 90ms ease, opacity 120ms ease;
+}
+
+.deck-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+  border-color: var(--primary);
+}
+
+.deck-btn:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+  background: var(--content);
+  border-color: var(--border);
+}
+
+.deck-btn .owner-tag {
+  position: absolute;
+  bottom: 1px;
+  right: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--foreground);
+  opacity: 0.9;
+}
+
+/* Subtle range / progress / table enhancements */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-track {
+  height: 0.45rem;
+  border-radius: 9999px;
+  background: var(--content);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 260ms ease;
+}
+
+/* Clean custom scrollbar for hand history */
+.hand-log-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+}

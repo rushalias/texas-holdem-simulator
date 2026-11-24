@@ -1,0 +1,7 @@
+services:
+  holdem-sim:
+    build: .
+    container_name: texas-holdem-simulator
+    ports:
+      - "${PORT:-8080}:8080"
+    restart: unless-stopped
