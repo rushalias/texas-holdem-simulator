@@ -38,8 +38,9 @@ try {
   process.exit(1);
 }
 
+const tailwindStyles = fs.readFileSync(path.join(__dirname, 'web/tailwind.css'), 'utf8');
 const themeStyles = fs.readFileSync(path.join(__dirname, 'web/standalone-theme.css'), 'utf8');
-const styles = `${themeStyles}\n\n${fs.readFileSync(path.join(__dirname, 'web/styles.css'), 'utf8')}`;
+const styles = `${tailwindStyles}\n\n${themeStyles}\n\n${fs.readFileSync(path.join(__dirname, 'web/styles.css'), 'utf8')}`;
 const template = fs.readFileSync(path.join(__dirname, 'web/template.html'), 'utf8');
 
 const html = template

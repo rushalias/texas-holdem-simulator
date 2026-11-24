@@ -12,6 +12,8 @@ import { playHand } from './engine.js';
 
 const _rawBuf = new Int8Array(7);
 
+export const MAX_TRIALS = 1000000;
+
 /**
  * Normalizes and validates a simulation scenario configuration.
  */
@@ -24,7 +26,7 @@ export function normalizeConfig(raw) {
     throw new Error(`Number of players must be between 2 and 9 (got ${n}).`);
   }
 
-  const trials = Math.max(10, Math.min(200000, Math.round(Number(raw.trials) || 5000)));
+  const trials = Math.max(10, Math.min(MAX_TRIALS, Math.round(Number(raw.trials) || 5000)));
   const sb = Math.max(1, Math.round(Number(raw.sb) || 1));
   const bb = Math.max(sb, Math.round(Number(raw.bb) || 2));
   const defaultStackBB = Math.max(5, Number(raw.stackBB) || 100);

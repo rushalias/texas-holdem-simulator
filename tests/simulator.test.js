@@ -4,7 +4,7 @@ import { parseCardList, buildRemainingDeck, createRng } from '../src/cards.js';
 import { evaluateHand, scoreCategory, describeHandScore, evaluatePreflopStrength } from '../src/evaluator.js';
 import { getArchetype } from '../src/archetypes.js';
 import { playHand } from '../src/engine.js';
-import { runSimulation, runSimulationAsync } from '../src/simulator.js';
+import { runSimulation, runSimulationAsync, normalizeConfig, MAX_TRIALS } from '../src/simulator.js';
 
 describe('Card parsing and validation', () => {
   it('parses standard, compact, 10x, and unknown card notations', () => {
@@ -304,5 +304,16 @@ describe('Known equity benchmarks and archetype behavioral sanity', () => {
       defaultNit.players[1].foldPct > stickyNit.players[1].foldPct + 50,
       `Expected custom overrides to slash Nit fold% (default ${defaultNit.players[1].foldPct.toFixed(1)}% vs overridden ${stickyNit.players[1].foldPct.toFixed(1)}%)`
     );
+  });
+
+  it('allows up to 1,000,000 trials and clamps higher values', () => {
+    const basePlayers = [
+      { name: 'Hero', cards: 'As Ad', type: 'tag' },
+      { name: 'Villain', cards: 'Ks Kd', type: 'aggressive' },
+    ];
+    assert.equal(MAX_TRIALS, 1000000);
+    assert.equal(normalizeConfig({ trials: 1000000, players: basePlayers }).trials, 1000000);
+    assert.equal(normalizeConfig({ trials: 2500000, players: basePlayers }).trials, 1000000);
+    assert.equal(normalizeConfig({ trials: 1, players: basePlayers }).trials, 10);
   });
 });
