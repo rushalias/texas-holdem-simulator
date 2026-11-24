@@ -332,7 +332,8 @@ async function handleRunSimulation() {
 
   try {
     const cfg = buildScenarioConfig();
-    const batchSize = state.trials >= 50000 ? 2500 : state.trials >= 20000 ? 1000 : 500;
+    const batchSize =
+      state.trials >= 500000 ? 5000 : state.trials >= 50000 ? 2500 : state.trials >= 20000 ? 1000 : 500;
     const res = await runSimulationAsync(
       cfg,
       (done, total) => updateRunButton(done, total),
