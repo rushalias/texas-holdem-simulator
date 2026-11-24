@@ -97,4 +97,4 @@ docker run --rm texas-holdem-sim npm test
 ## Notes
 - **Zero npm dependencies**: The project uses pure Node.js built-ins and ES modules, so `docker build` requires no `npm install` step and finishes in a few seconds.
 - **Light / Dark mode**: The Web UI automatically adapts to your browser/OS light or dark theme preference.
-- **Offline styling note**: Tailwind utility classes load from `https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js` in the browser; ensure your browser has internet access to load styles.
+- **Fully offline**: All CSS and JavaScript are bundled directly into `dist/index.html` with no external CDN requests required.
